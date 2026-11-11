@@ -1,0 +1,21 @@
+# Render "blueprint": tells Render how to run the server for free. Secrets are typed in Render's dashboard.
+services:
+  - type: web
+    name: shop-finance
+    runtime: node
+    plan: free          # for a shop that must work 24/7 change to: starter  (always on, about $7/month)
+    region: frankfurt   # same region as the Turso database = fast
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_PASSWORD
+        sync: false
+      - key: TURSO_URL
+        sync: false
+      - key: TURSO_TOKEN
+        sync: false
+      - key: LOCAL_COPY
+        value: "off"          # Render's disk is temporary, so a file copy there is pointless
+      - key: TZ
+        value: Africa/Cairo

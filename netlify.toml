@@ -1,0 +1,21 @@
+# Netlify publishes ONLY the front end (the screens). The server on Render handles the data and the Turso database.
+# In Netlify: Site settings -> Environment variables -> add SERVER_URL = your Render address (https://....onrender.com)
+[build]
+  command = "node scripts/build-www.js $SERVER_URL"   # copies the front end into "www" and writes the server address into it
+  publish = "www"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"

@@ -1,0 +1,8 @@
+# Runs the app in Docker. The data lives in Turso (online), so the container itself holds nothing important.
+# Put APP_PASSWORD, TURSO_URL and TURSO_TOKEN in the .env file, then: docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports: ["3000:3000"]
