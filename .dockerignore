@@ -1,6 +1,12 @@
 node_modules
+dist
 data
+app
 .env
-backups
-www
-android
+*.log
+.git
+.github
+ai-tool
+docs
+tests
+*.cmd

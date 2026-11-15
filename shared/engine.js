@@ -1,0 +1,246 @@
+/* =====================================================================
+   THE SHOP ENGINE — every accounting rule lives here, and ONLY here.
+   The same file runs on the server (the truth) and in the browser/phone
+   (so the screen updates instantly, even offline). They can never disagree.
+
+   WORDS USED IN THE CODE
+   - item   : something with a balance that lives across days:
+                wallet   (محفظة)  -> its balance is typed by hand
+                client   (عميل)    -> debt the client owes the shop
+                debt     (دين على المحل) -> what the shop owes someone
+                constant (ثابت)    -> fixed amount subtracted every day
+   - book   : everything of ONE day: the day itself, one "row" per item,
+              the input/output/sale entries and the manual adjustments.
+   - row    : an item's numbers on a given day.
+                wallet/constant: value (typed)
+                client/debt    : opening (from the day before) + calculator text = final
+   - op     : one change, e.g. { t:'addEntry', id, kind:'sale', amount:500 }.
+              reduce(state, op) applies it. Same op + same state = same result.
+
+   WHAT CARRIES TO THE NEXT DAY: wallets, clients, shop debts, constants.
+   WHAT STARTS EMPTY EVERY DAY: inputs/outputs/sales, cash, network, manual adjustments, notes.
+
+   THE NUMBERS (التصفية page)
+     تصفية البارحة        opening   = the confirmed real total of the previous day
+     ربح اليوم            profit    = inputs + sales - outputs
+     التصفية الافتراضية    virtual   = opening + profit
+     التصفية الحقيقية      real      = wallets + clients + cash + network
+                                      - shop debts - constants ± adjustments
+     العجز/الزيادة        diff      = virtual - real   (positive = عجز, negative = زيادة)
+   ===================================================================== */
+import { r2, parseAmount, evalCalc, toLatinDigits } from './money.js';
+
+export class EngineError extends Error {}
+const fail = m => { throw new EngineError(m); };
+export const clone = o => JSON.parse(JSON.stringify(o));
+
+export const ITEM_TYPES = { wallet: 'محفظة', client: 'عميل', debt: 'دين على المحل', constant: 'ثابت' };
+export const ENTRY_KINDS = { input: 'المدخلات', output: 'المخرجات', sale: 'المبيعات' };
+const hasCalc = type => type === 'client' || type === 'debt';   // items whose day value comes from the calculator
+
+/* ---------------------------------------------------------------------
+   Building blocks
+   --------------------------------------------------------------------- */
+/** A brand-new empty day. opening = تصفية البارحة (null only before the very first day is set up). */
+export function emptyBook(dayId, opening = null, seq = 1) {
+  return {
+    day: { id: dayId, seq, date: null, status: 'open', opening, cash: 0, network: 0, cashChanged: false, networkChanged: false, notes: '', closedAt: null },
+    rows: {},      // itemId -> row
+    entries: {},   // entryId -> { id, kind, name, amount, createdAt, late? }
+    adjs: {},      // adjustmentId -> { id, amount (+ adds, - subtracts), note, createdAt }
+  };
+}
+
+/** A row's final value on its day. */
+export function rowFinal(row, type) {
+  if (hasCalc(type)) return r2((row.opening || 0) + (evalCalc(row.calc) || 0));
+  return r2(row.value || 0);
+}
+
+const amountOf = (v, msg = 'القيمة غير صحيحة') => { const n = parseAmount(v); if (!Number.isFinite(n)) fail(msg); return r2(n); };
+const positive = (v, msg = 'القيمة غير صحيحة') => { const n = amountOf(v, msg); if (!(n > 0)) fail(msg); return n; };
+const text = s => String(s ?? '').trim();
+
+/* ---------------------------------------------------------------------
+   The summary of one day (all the numbers of the التصفية page)
+   --------------------------------------------------------------------- */
+export function summarize(book, items) {
+  let wallets = 0, clients = 0, debts = 0, constants = 0, input = 0, output = 0, sale = 0, adjustments = 0;
+  for (const [id, row] of Object.entries(book.rows)) {
+    const it = items[id];
+    if (!it || row.status !== 'active') continue;          // deleted items never count
+    const v = rowFinal(row, it.type);
+    if (it.type === 'wallet') wallets += v;                  // every wallet counts (the ✓ "active" mark is only a visual hint)
+    else if (it.type === 'client') clients += v;
+    else if (it.type === 'debt') debts += v;
+    else if (it.type === 'constant') constants += v;
+  }
+  for (const e of Object.values(book.entries)) { if (e.kind === 'input') input += e.amount; else if (e.kind === 'output') output += e.amount; else sale += e.amount; }
+  for (const a of Object.values(book.adjs)) adjustments += a.amount;
+  const d = book.day;
+  const profit = r2(input + sale - output);
+  const opening = d.opening == null ? null : r2(d.opening);
+  const virtual = opening == null ? null : r2(opening + profit);
+  const real = r2(wallets + clients + d.cash + d.network - debts - constants + adjustments);
+  const diff = virtual == null ? null : r2(virtual - real);
+  return {
+    opening, profit, virtual, real, diff,
+    input: r2(input), output: r2(output), sale: r2(sale),
+    wallets: r2(wallets), clients: r2(clients), debts: r2(debts), constants: r2(constants), adjustments: r2(adjustments),
+    cash: r2(d.cash), network: r2(d.network),
+  };
+}
+
+/* ---------------------------------------------------------------------
+   Carrying values from one day to the next ("like a spreadsheet")
+   - client/debt: the next day starts from the previous final (calculator empties).
+   - wallet/constant: copied, unless they were changed on that later day.
+   - cash, network, adjustments, inputs/outputs/sales: NOT carried (every day starts with its own).
+   - status (deleted / active) and the ✓ mark: copied, unless changed on that later day.
+   - purged items are dropped.
+   Used when a day is closed (fresh = a brand-new next day) and when a past day is edited
+   (the change flows to all the following days).
+   --------------------------------------------------------------------- */
+export function carry(prev, items, next, prevSummary = summarize(prev, items)) {
+  next.day.opening = prevSummary.real;                       // تصفية البارحة = the confirmed real total
+  for (const [id, pr] of Object.entries(prev.rows)) {
+    const it = items[id];
+    if (!it || it.purged) { delete next.rows[id]; continue; }
+    let r = next.rows[id];
+    if (!r) r = next.rows[id] = { opening: 0, calc: '', value: 0, active: !!pr.active, status: pr.status, changed: false, achanged: false, schanged: false };
+    if (hasCalc(it.type)) { r.opening = rowFinal(pr, it.type); r.value = rowFinal(r, it.type); }
+    else if (!r.changed) r.value = pr.value;
+    if (!r.achanged) r.active = !!pr.active;
+    if (!r.schanged) r.status = pr.status;
+  }
+  return next;
+}
+
+/** The next day after `book` is closed. */
+export function nextBook(book, items, newDayId) {
+  return carry(book, items, emptyBook(newDayId, null, book.day.seq + 1));
+}
+
+/* ---------------------------------------------------------------------
+   Applying ONE change.
+   state = { items, book }   (book = the day being worked on: the open day, or a past day in edit mode)
+   Throws EngineError (with an Arabic message) when the change is not allowed.
+   Everything is checked BEFORE anything is changed.
+   --------------------------------------------------------------------- */
+export function reduce(state, op) {
+  const { items, book } = state;
+  const d = book.day;
+  // A change written while an EARLIER day was open (offline phone) that arrives after that day was closed.
+  const late = op.dayId && op.dayId !== d.id ? (op.dayDate || 'يوم سابق') : null;
+  const lateRefuse = () => { if (late) fail('هذا التعديل كُتب ليوم أُغلق بعد ذلك — لم يُطبَّق'); };
+  const row = id => book.rows[id] || fail('غير موجود في هذا اليوم');
+  const item = id => (items[id] && !items[id].purged ? items[id] : fail('غير موجود'));
+  const ts = op.ts || new Date().toISOString();
+
+  switch (op.t) {
+    /* ----- input / output / sale ----- */
+    case 'addEntry': {
+      if (!ENTRY_KINDS[op.kind] || !op.id) fail('بيانات غير صحيحة');
+      if (book.entries[op.id]) return;                                 // already there (repeated op)
+      book.entries[op.id] = { id: op.id, kind: op.kind, name: text(op.name), amount: positive(op.amount), createdAt: ts, ...(late ? { late } : {}) };
+      return;
+    }
+    case 'editEntry': {
+      const e = book.entries[op.id] || fail('السجل غير موجود في هذا اليوم');
+      const amount = op.amount !== undefined ? positive(op.amount) : e.amount;
+      e.amount = amount; if (op.name !== undefined) e.name = text(op.name);
+      return;
+    }
+    case 'delEntry': { if (!book.entries[op.id]) fail('السجل غير موجود في هذا اليوم'); delete book.entries[op.id]; return; }
+
+    /* ----- items: wallets, clients, shop debts, constants ----- */
+    case 'addItem': {
+      if (!ITEM_TYPES[op.type] || !op.id) fail('بيانات غير صحيحة');
+      if (items[op.id]) return;                                        // repeated op
+      const name = op.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);   // wallet numbers are stored with 0-9
+      if (!name && op.type !== 'constant') fail(op.type === 'wallet' ? 'اكتب رقم المحفظة' : 'اكتب الاسم');
+      const amount = op.type === 'constant' ? positive(op.amount) : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
+      if (op.type !== 'constant') {
+        const same = Object.entries(items).find(([id, it]) => it.type === op.type && !it.purged && it.name === name && book.rows[id] && book.rows[id].status === 'active');
+        if (same) fail(op.type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل');
+      }
+      items[op.id] = { id: op.id, type: op.type, name: name || ITEM_TYPES.constant, purged: false, createdAt: ts };
+      book.rows[op.id] = hasCalc(op.type)
+        ? { opening: amount, calc: '', value: amount, active: false, status: 'active', changed: true, achanged: false, schanged: true }
+        : { opening: 0, calc: '', value: amount, active: op.type === 'wallet', status: 'active', changed: true, achanged: false, schanged: true };
+      return;
+    }
+    case 'renameItem': {
+      const it = item(op.id), name = it.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);
+      if (!name) fail('اكتب الاسم');
+      it.name = name; return;
+    }
+    case 'setValue': {                                                  // wallet balance / constant amount, typed by hand
+      lateRefuse();
+      const it = item(op.id), r = row(op.id);
+      if (hasCalc(it.type)) fail('بيانات غير صحيحة');
+      r.value = it.type === 'constant' ? positive(op.value) : amountOf(op.value); r.changed = true; return;
+    }
+    case 'setActive': { item(op.id); const r = row(op.id); r.active = !!op.active; r.achanged = true; return; }
+    case 'setCalc': {                                                   // the calculator of a client / shop debt
+      lateRefuse();                                                     // a calculation written for a closed day is kept in "لم يُقبل" for you to redo, never guessed
+      const it = item(op.id), r = row(op.id);
+      if (!hasCalc(it.type)) fail('بيانات غير صحيحة');
+      const calc = String(op.calc ?? '');
+      if (!Number.isFinite(evalCalc(calc))) fail('الحساب غير صحيح — استخدم أرقامًا و + و − فقط');
+      r.calc = calc; r.value = rowFinal(r, it.type); return;
+    }
+    case 'delItem': { item(op.id); const r = row(op.id); r.status = 'deleted'; r.schanged = true; return; }   // stays visible (struck), keeps its history
+    case 'restoreItem': { item(op.id); const r = row(op.id); r.status = 'active'; r.schanged = true; return; }
+
+    /* ----- the day ----- */
+    case 'setCash': lateRefuse(); d.cash = amountOf(op.value); d.cashChanged = true; return;
+    case 'setNetwork': lateRefuse(); d.network = amountOf(op.value); d.networkChanged = true; return;
+    case 'setNotes': lateRefuse(); d.notes = String(op.notes ?? ''); return;
+    case 'setOpening': {                                                // only for the very first day (or in past-day edit, by the server)
+      if (!op.force && d.seq !== 1) fail('تصفية البارحة تأتي من اليوم السابق');
+      d.opening = amountOf(op.value); return;
+    }
+    case 'addAdj': {                                                    // manual + / − on the real total, with a note
+      if (!op.id) fail('بيانات غير صحيحة');
+      if (book.adjs[op.id]) return;
+      const amount = amountOf(op.amount); if (!amount) fail('اكتب المبلغ');
+      if (!text(op.note)) fail('اكتب سبب هذا المبلغ');
+      book.adjs[op.id] = { id: op.id, amount, note: text(op.note), createdAt: ts, ...(late ? { late } : {}) };
+      return;
+    }
+    case 'delAdj': { if (!book.adjs[op.id]) fail('غير موجود في هذا اليوم'); delete book.adjs[op.id]; return; }
+
+    default: fail('عملية غير معروفة');
+  }
+}
+
+/** Apply many ops; each one is all-or-nothing. Returns { done:[opId], rejected:[{opId,error}] }. */
+export function applyAll(state, ops) {
+  const done = [], rejected = [];
+  for (const op of ops) {
+    const snap = clone(state);
+    try { reduce(state, op); done.push(op.opId); }
+    catch (e) {
+      if (!(e instanceof EngineError)) throw e;
+      state.items = snap.items; state.book = snap.book;                 // undo a half-applied op
+      rejected.push({ opId: op.opId, error: e.message });
+    }
+  }
+  return { done, rejected };
+}
+
+/* ---------------------------------------------------------------------
+   Date rules for closing a day
+   - any date up to today that has no saved day yet
+   --------------------------------------------------------------------- */
+export function checkCloseDate(date, today, closedDates) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) fail('اختر تاريخًا');
+  if (closedDates.includes(date)) fail('يوجد يوم محفوظ بهذا التاريخ بالفعل');
+  if (today && date > today) fail('لا يمكن حفظ يوم بتاريخ لم يأتِ بعد');
+}
+
+/* ---------------------------------------------------------------------
+   "ربح الكاش من أول الشهر": inputs whose name starts with ربح كاش / ربح الكاش
+   --------------------------------------------------------------------- */
+export const isCashProfit = name => /^\s*ربح\s+(ال)?كاش/.test(String(name || ''));

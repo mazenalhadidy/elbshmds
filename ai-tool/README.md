@@ -1,0 +1,43 @@
+# مدقق الديون (واتساب) — محل الباشمهندس
+
+بيقرأ محادثة واتساب متصدّرة (نص + صور)، ويحسب دين العميل من آخر «بدايتنا»، ويتعلّم من تصحيحاتك.
+
+| الملف | الوظيفة |
+|---|---|
+| `public/index.html` · `style.css` | الصفحة |
+| `public/app.js` | الشاشة (الرفع، العرض، التصحيح) |
+| `public/core.js` | المنطق: قراءة التصدير، الحساب، التكرار (عليه اختبارات) |
+| `lib/ai.js` | **الكلام مع Claude**: القواعد، شكل الرد، النماذج، التكلفة |
+| `netlify/edge-functions/analyze.js` | `/api/analyze` على Netlify (المفتاح هنا بس) |
+| `netlify/functions/store.mjs` | `/api/store`: حفظ التعليم في Netlify Blobs |
+| `local/server.mjs` | نفس الأداة على الكمبيوتر (Claude أو Ollama أوفلاين) |
+| `test/` | `npm test` |
+
+## إيه الجديد (v2)
+- **أرخص وأسرع:** القواعد وتعليمك بيتبعتوا مرة ويتخزنوا (prompt caching): كل صورة بعد الأولى بتدفع ~١٠٪ من تمنهم.
+- **رد مضمون:** Claude بيرد بـ JSON بشكل محدد (structured outputs)، مفيش تخمين في القراءة.
+- **أكثر أمانًا:** السيرفر بيقبل ٥ مهام بس (`image`, `text`, `checkpoints`, `lessons`, `merge`) — مش بوابة مفتوحة لـ Claude. والصفحة من غير سكربتات inline.
+- **أسرع في التحليل:** ٤ صور في نفس الوقت، ودفعات النص بالتوازي.
+- **كلام أقل:** تعليمات أقصر للنموذج، ونصوص أقصر في الشاشة.
+- إصلاح: نماذج 5.5 بترفض `temperature`، اتشال.
+
+## التشغيل على Netlify
+1. Netlify ← Add new site ← Import from Git ← المستودع `elbshmds` ← **Base directory: `ai-tool`** ← Deploy.
+2. Environment variables: `ANTHROPIC_API_KEY` (من console.anthropic.com، وحط حد صرف شهري) و`APP_PASSWORD` (١٢ حرف أو أكتر). ثم Trigger deploy.
+3. كل push على `main` بيعمل deploy لوحده، بس لو حاجة جوه `ai-tool/` اتغيرت.
+اختياري: `MODEL_FAST` / `MODEL_STRONG` لتغيير النماذج.
+
+## على الكمبيوتر
+1. Node.js 22 أو أحدث. دبل كليك `start-local.cmd` (أول مرة بيسطّب ويعمل `local/config.json`).
+2. في `local/config.json`: `password`، و`engine` = `anthropic` (مع `anthropicApiKey`) أو `ollama` (أوفلاين: `ollama pull qwen2.5vl:7b`).
+3. افتح `http://localhost:8787` (أو عنوان الكمبيوتر من الموبايل على نفس الواي فاي).
+
+## جوه موقع المحل
+`elbshmds-ai-page.html`: غيّر `TOOL_URL` لرابط Netlify، وزوّد عنوان لابتوب المحل في `frame-ancestors` في `netlify.toml`.
+
+## الأمان
+- مفتاح Claude في Netlify (أو `local/config.json`) بس. الباسورد مطلوب مع كل طلب، والغلط بيتأخر ثانية.
+- المحادثات والصور مش بتتحفظ؛ اللي بيتحفظ: القواعد والتصحيحات.
+
+## التكلفة
+Haiku للعادي، Sonnet للصور المش واضحة ولدمج التصحيحات. التكلفة التقريبية بتظهر بعد كل تحليل.

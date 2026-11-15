@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مدقق الديون</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#6d28d9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="مدقق الديون">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<link rel="icon" href="/icon-192.png">
+<link rel="stylesheet" href="/style.css">
+<script src="/jszip.min.js" defer></script>
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<div id="login" class="hide">
+  <form class="card" id="loginForm">
+    <h2>مدقق الديون</h2>
+    <input id="pw" type="password" autocomplete="current-password" placeholder="الباسورد" aria-label="الباسورد">
+    <p id="pwErr" class="warnbox hide"></p>
+    <div class="acts"><button type="submit">دخول</button></div>
+  </form>
+</div>
+<main>
+<div class="top"><h1>مدقق الديون</h1><button class="ghost" id="logout">خروج</button></div>
+<p class="sub">ارفع محادثة العميل، أقولك عليه كام.</p>
+
+<section class="card" id="step1">
+  <h2>١. المحادثة</h2>
+  <label class="file">
+    <input type="file" id="file" accept=".zip,.txt,application/zip,text/plain">
+    <span id="fileLabel">اختر ملف التصدير (.zip مع الوسائط)</span>
+  </label>
+  <details>
+    <summary>إزاي أصدّرها؟</summary>
+    <ol><li>افتح المحادثة ← الاسم فوق (آيفون) أو ⋮ ← المزيد (أندرويد).</li><li>«تصدير الدردشة» ← «إرفاق/تضمين الوسائط».</li><li>احفظ في الملفات وارجع هنا.</li></ol>
+  </details>
+  <p id="err" class="warnbox hide"></p>
+</section>
+
+<section class="card hide" id="step2">
+  <h2>٢. مين المحل؟</h2>
+  <p class="note">اختار أسماء المحل والموظفين. الباقي = العميل.</p>
+  <div class="chips" id="senders"></div>
+  <h2 style="margin-top:18px">رصيد البداية</h2>
+  <div id="openBox"></div>
+  <div class="grid2">
+    <input id="openAmt" inputmode="decimal" class="amt" aria-label="مبلغ البداية">
+    <select id="openDir" aria-label="اتجاه البداية"><option value="1">على العميل</option><option value="-1">للعميل</option></select>
+  </div>
+  <div class="acts"><button id="go">حلّل</button></div>
+  <p id="aiNote" class="warnbox hide"></p>
+</section>
+
+<section class="card hide" id="sum" aria-live="polite">
+  <div class="note" id="debtLabel">على العميل</div>
+  <div class="debt" id="debt">0</div>
+  <div class="stats">
+    <div><b id="sOpen">0</b><span>البداية</span></div>
+    <div><b id="sSent">0</b><span>أرسلنا (+)</span></div>
+    <div><b id="sRec">0</b><span>استلمنا (−)</span></div>
+  </div>
+  <div class="bar"><i id="prog"></i></div>
+  <p class="note" id="progText"></p>
+  <div class="acts"><button class="ghost" id="copy">انسخ الملخص</button></div>
+</section>
+
+<section class="hide" id="step3">
+  <div class="filters" id="filters">
+    <button class="chip" data-f="money" aria-pressed="true">المعاملات</button>
+    <button class="chip" data-f="review" aria-pressed="false">للمراجعة <small id="revN"></small></button>
+    <button class="chip" data-f="all" aria-pressed="false">الكل</button>
+  </div>
+  <div id="list"></div>
+</section>
+
+<section class="card" id="train">
+  <h2>التعليم</h2>
+  <p class="note">تصحيحاتك وقواعدك بتتبعت مع كل تحليل.</p>
+  <div class="fix"><input id="ruleIn" placeholder="قاعدة جديدة، مثلًا: «وصل» = تأكيد مش دفع"><button id="ruleAdd">أضف</button></div>
+  <ul class="rules" id="rules"></ul>
+  <p class="note" id="exN"></p>
+  <div id="learnedBox" class="hide"><h2 style="margin-top:12px">خلاصة التصحيحات القديمة</h2>
+    <textarea id="learned" rows="6" aria-label="خلاصة التصحيحات القديمة"></textarea></div>
+  <details><summary>كلمات البداية</summary>
+    <input id="kw" aria-label="كلمات البداية مفصولة بفاصلة">
+  </details>
+  <p class="note" id="store"></p>
+</section>
+</main>
+<div id="zoom" role="dialog" aria-label="الصورة"><img alt="صورة مكبرة"></div>
+</body>
+</html>

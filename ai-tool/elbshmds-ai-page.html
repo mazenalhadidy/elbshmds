@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مدقق ديون واتساب — محل الباشمهندس</title>
+<style>
+  /* صفحة بسيطة في موقع المحل بتعرض أداة الذكاء الاصطناعي (اللي على Netlify) جواها */
+  html,body{margin:0;height:100%;background:#f6f5fa;font-family:system-ui,sans-serif}
+  .bar{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 14px;background:#fff;border-bottom:1px solid #e6e3ef}
+  .bar a{color:#6d28d9;text-decoration:none;font-weight:600;min-height:40px;display:flex;align-items:center}
+  iframe{display:block;width:100%;height:calc(100% - 57px);border:0}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <a href="/">← رجوع للمحل</a>
+    <!-- لو العرض جوه الصفحة مش مريح على الموبايل، الرابط ده بيفتح الأداة لوحدها -->
+    <a id="open" target="_blank" rel="noopener">افتحها لوحدها</a>
+  </div>
+  <iframe id="tool" title="مدقق ديون واتساب" allow="clipboard-write"></iframe>
+  <script>
+    // غيّر الرابط ده لرابط موقعك على Netlify
+    const TOOL_URL = "https://YOUR-SITE.netlify.app/";
+    document.getElementById("tool").src = TOOL_URL;
+    document.getElementById("open").href = TOOL_URL;
+  </script>
+</body>
+</html>

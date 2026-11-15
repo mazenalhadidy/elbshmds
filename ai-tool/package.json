@@ -1,0 +1,16 @@
+{
+  "name": "wa-debt-checker",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WhatsApp debt checker for محل الباشمهندس — static page + Netlify functions (or a local server)",
+  "scripts": {
+    "start": "node local/server.mjs",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.3.0",
+    "@netlify/blobs": "11.1.9"
+  }
+}

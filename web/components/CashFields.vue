@@ -1,0 +1,24 @@
+<!-- النقدية و رصيد ماكينات الشبكة (typed; saved as you type; counted in التصفية الحقيقية) -->
+<script setup>
+import { ref, watch } from 'vue';
+import { useShop } from '@/stores/shop.js';
+import MoneyInput from './MoneyInput.vue';
+import { useToasts } from '@/stores/toasts.js';
+const toasts = useToasts();
+let typed = false;   // a value was typed: say "saved" when you leave the field
+const shop = useShop();
+const cash = ref(shop.book?.day.cash || ''), net = ref(shop.book?.day.network || '');
+watch(() => shop.book?.day.cash, v => { if (document.activeElement?.id !== 'cash') cash.value = v || ''; });
+watch(() => shop.book?.day.network, v => { if (document.activeElement?.id !== 'net') net.value = v || ''; });
+const save = (t, v) => { if (v !== '' && v !== (t === 'setCash' ? shop.book.day.cash : shop.book.day.network) && shop.dispatch({ t, value: v }, { quiet: true })) typed = true; };
+const done = label => { if (typed) { toasts.show('تم حفظ ' + label); typed = false; } };
+</script>
+<template>
+  <section class="card">
+    <div class="card-h"><h2>النقدية والشبكة</h2></div>
+    <div class="card-b grid2">
+      <div><label class="label" for="cash">النقدية الموجودة في المحل</label><MoneyInput id="cash" v-model="cash" :disabled="!shop.canEdit" @update:model-value="v => save('setCash', v)" @blur="done('النقدية')" /></div>
+      <div><label class="label" for="net">رصيد ماكينات الشبكة</label><MoneyInput id="net" v-model="net" :disabled="!shop.canEdit" @update:model-value="v => save('setNetwork', v)" @blur="done('رصيد الشبكة')" /></div>
+    </div>
+  </section>
+</template>
