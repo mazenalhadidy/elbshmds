@@ -210,6 +210,14 @@ const cpText = c => (c.terms ? expression(c.terms) + '\n=' + fmt(c.stated) : str
 
 /* ===== "our start is this": a message text or a picture, found from the end of the chat backwards ===== */
 const marker = { text: '', hash: null };
+let startMode = 'auto';                      // 'auto' = the AI finds the last closing · 'mine' = I tell it
+$('#startMode').addEventListener('click', e => {
+  const b = e.target.closest('[data-mode]'); if (!b) return;
+  startMode = b.dataset.mode;
+  document.querySelectorAll('#startMode [data-mode]').forEach(x => x.setAttribute('aria-checked', x === b));
+  show('#markBox', startMode === 'mine'); show('#autoNote', startMode === 'auto');
+  if (startMode === 'mine') setTimeout(() => $('#markText').focus(), 50);
+});
 async function fingerprint(blob) {
   const bmp = await createImageBitmap(blob);
   const c = document.createElement('canvas'); c.width = 9; c.height = 8;
@@ -380,7 +388,11 @@ $('#go').addEventListener('click', async () => {
   let done = 0;
   const step = () => { done++; $('#prog').style.width = Math.min(95, 100 * done / Math.max(1, allRows.filter(r => r.state === 'pending').length / 20 + done)) + '%'; renderSoon(); };
   let from = -1;
-  if (marker.text || marker.hash) {
+  if (startMode === 'mine' && !marker.text && !marker.hash) {
+    $('#aiNote').textContent = 'الصق نص رسالة البداية أو اختر صورتها، أو اختر «ابحث عنها بنفسك».'; show('#aiNote');
+    busy = false; $('#go').disabled = false; show('#sum', false); show('#step3', false); return;
+  }
+  if (startMode === 'mine') {
     $('#progText').textContent = 'أبحث عن رسالة البداية من آخر المحادثة…';
     const at = await locateMarker();
     if (at >= 0) from = await startAt(at, step);

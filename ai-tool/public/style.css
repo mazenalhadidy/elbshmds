@@ -96,3 +96,7 @@ label.file.drag{background:var(--v);color:#fff}
 label.file.small{min-height:52px;margin-top:8px}
 #markPreview img{max-height:120px;border-radius:8px;margin-top:8px;display:block}
 .start-btn{font-size:14px}
+.seg2{display:flex;border:1px solid var(--v);border-radius:10px;overflow:hidden}
+.seg2 button{flex:1;border:0;border-radius:0;background:transparent;color:var(--v);font-weight:600}
+.seg2 button[aria-checked=true]{background:var(--v);color:#fff}
+.mark{background:var(--vs);border-radius:12px;padding:8px 12px;margin-top:10px}
