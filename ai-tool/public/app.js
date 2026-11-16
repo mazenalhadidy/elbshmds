@@ -4,7 +4,7 @@
 import {
   esc, fmt, num, clamp, KIND, IMG, MEDIA, parse, strip, prep, applyAnswer, weak,
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
-  roleFromHistory, recordRoles, seedStats, rolesInput,
+  roleFromHistory, recordRoles, seedStats, rolesInput, decideRoles,
   linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression, expressionHtml,
   parseStatement, findTextMarker, dhash, hamming, SAME_PICTURE, isTransaction,
 } from './core.js';
@@ -151,38 +151,31 @@ async function setup() {
   for (const m of msgs) if (m.sender && !m.sys) cnt.set(m.sender, (cnt.get(m.sender) || 0) + 1);
   senders = [...cnt].sort((a, b) => b[1] - a[1]).map(([n]) => n);
   settings.shopStats = seedStats(settings.shopStats, settings.shop);
-  shop = new Set(); roleWhy = new Map();
-  const unsure = [];
-  for (const n of senders) {
-    const r = n === PICS ? 'shop' : roleFromHistory(settings.shopStats, n);
-    if (r) { if (r === 'shop') shop.add(n); roleWhy.set(n, n === PICS ? 'صور ملصقة' : 'من إجاباتك السابقة'); }
-    else unsure.push(n);
-  }
+  // a first guess from your answers (shown at once), then the AI checks EVERY sender from what they write
+  let d = decideRoles(senders, settings.shopStats, null, { always: [PICS] });
+  shop = d.shop; roleWhy = d.why;
   $('#openBox').innerHTML = ''; show('#openRow', false); show('#aiNote', false);
   drawSenders(cnt);
   show('#step2');
-  let sure = !unsure.length;
-  if (unsure.length && key) {
-    $('#rolesNote').textContent = 'أتعرّف على المرسلين…';
+  let sure = d.sure, changed = [];
+  if (key) {
+    $('#rolesNote').textContent = 'أتعرّف على أطراف المحادثة…';
     try {
       const known = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
-      const v = await ai('roles', rolesInput(msgs, unsure, { chat: chatName, known }));
-      const got = new Map((v?.roles || []).map(x => [String(x.sender), x]));
-      sure = true;
-      for (const n of unsure) {
-        const x = got.get(n);
-        if (!x) { sure = false; continue; }
-        if (x.side === 'shop') shop.add(n);
-        roleWhy.set(n, String(x.why || ''));
-        if (clamp(x.confidence) < 0.8) sure = false;
-      }
-    } catch { sure = false; }
+      const v = await ai('roles', rolesInput(msgs, senders.filter(n => n !== PICS), { chat: chatName, known, history: settings.shopStats }));
+      d = decideRoles(senders, settings.shopStats, new Map((v?.roles || []).map(x => [String(x.sender), x])), { always: [PICS] });
+      shop = d.shop; roleWhy = d.why; sure = d.sure; changed = d.changed;
+    } catch { /* keep the guess from your answers */ }
     drawSenders(cnt);
   }
   const names = s => s.length ? s.join('، ') : '—';
   $('#rolesNote').textContent = shop.size
     ? `${sure ? 'عرفتُ' : 'أظن أن'} المحل: ${names(senders.filter(n => shop.has(n)))} · والعميل: ${names(senders.filter(n => !shop.has(n)))}.${sure ? '' : ' راجع الاختيار.'}`
     : 'اختر أسماء المحل والموظفين، والباقي هو العميل.';
+  if (changed.length) {
+    $('#aiNote').textContent = '⚠️ ' + changed.map(c => `«${c.name}» كان ${c.was === 'shop' ? 'من المحل' : 'عميلًا'} سابقًا، ويبدو الآن ${c.now === 'shop' ? 'من المحل' : 'عميلًا'}`).join('، ') + '. راجع الاختيار ثم اضغط «حلّل».';
+    show('#aiNote');
+  }
   // known chat, known people, an experienced user: don't ask, start
   if (sure && shop.size && settings.runs >= TRUST_RUNS && !busy) {
     $('#aiNote').textContent = 'بدأتُ التحليل تلقائيًا لأنني أعرف أطراف المحادثة. إن أردت التغيير فعدّل ثم اضغط «حلّل».'; show('#aiNote');

@@ -352,15 +352,46 @@ export function seedStats(stats, shopNames = []) {
   return out;
 }
 /** What the AI reads to decide who is who: a sample of each unknown sender's messages. */
-export function rolesInput(msgs, names, { chat = '', known = [] } = {}) {
+export function rolesInput(msgs, names, { chat = '', known = [], history = {} } = {}) {
   const parts = [`اسم المحادثة: ${chat || '—'}`];
   if (known.length) parts.push('أسماء عُرف سابقًا أنها من المحل: ' + known.join('، '));
   for (const n of names) {
+    const h = history[n];
     const mine = msgs.filter(m => m.sender === n && !m.sys);
     const pics = mine.filter(m => new RegExp(`\\.(${EXT})`, 'i').test(m.text)).length;
     const texts = mine.map(m => strip(m.text)).filter(Boolean);
     const sample = [...texts.slice(0, 6), ...texts.slice(-8)].filter((t, k, a) => a.indexOf(t) === k).map(t => '- ' + t.replace(/\n/g, ' ⏎ ').slice(0, 160));
-    parts.push(`المرسل: ${n} (${mine.length} رسالة، ${pics} مرفق)\n${sample.join('\n') || '- (مرفقات فقط)'}`);
+    const past = h ? `، سابقًا: محل ×${h.shop || 0} وعميل ×${h.client || 0}` : '، اسم جديد';
+    parts.push(`المرسل: ${n} (${mine.length} رسالة، ${pics} مرفق${past})\n${sample.join('\n') || '- (مرفقات فقط)'}`);
   }
   return parts.join('\n\n');
+}
+
+/**
+ * Decide every sender's side for THIS chat. Names can change (the shop may write from a new name or number,
+ * a name may now belong to someone else), so the AI judges every sender from what they write, every time;
+ * your past answers are evidence, not a rule.
+ *   - AI and history agree               -> decided
+ *   - only one of them                   -> decided if the AI is confident (≥ 0.8) / history is clear
+ *   - they disagree                      -> the clearer one wins, but you are asked to check (never silent)
+ * Returns { shop: Set, why: Map, sure: boolean, changed: [{ name, was, now }] }.
+ */
+export function decideRoles(names, history, ai, { always = [] } = {}) {
+  const shop = new Set(), why = new Map(), changed = [];
+  let sure = true;
+  for (const n of names) {
+    if (always.includes(n)) { shop.add(n); why.set(n, 'صور ملصقة'); continue; }
+    const h = roleFromHistory(history, n), a = ai?.get(n), conf = a ? clamp(a.confidence) : 0;
+    let side;
+    if (a && h && a.side === h) { side = h; why.set(n, `${a.why || ''} (ويوافق إجاباتك السابقة)`.trim()); }
+    else if (a && h) {
+      side = conf >= 0.9 ? a.side : h; sure = false;
+      changed.push({ name: n, was: h, now: a.side });
+      why.set(n, `كان ${h === 'shop' ? 'من المحل' : 'عميلًا'} سابقًا، والآن يبدو ${a.side === 'shop' ? 'من المحل' : 'عميلًا'}: ${a.why || ''}`);
+    } else if (a) { side = a.side; if (conf < 0.8) sure = false; why.set(n, a.why || ''); }
+    else if (h) { side = h; why.set(n, 'من إجاباتك السابقة'); }
+    else { side = 'client'; sure = false; why.set(n, 'غير معروف'); }
+    if (side === 'shop') shop.add(n);
+  }
+  return { shop, why, sure, changed };
 }
