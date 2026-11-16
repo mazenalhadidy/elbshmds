@@ -25,7 +25,11 @@ export const RULES = `محاسب لمحل موبايلات مصري (محل ال
 3. من الإيصال خُد مبلغ التحويل بس: مش الرصيد ولا الرسوم ولا رقم العملية أو الموبايل.
 4. "ألف" = ×١٠٠٠، و"ك" بعد الرقم = ×١٠٠٠. الأرقام ممكن تكون عربية.
 5. مش متأكد؟ قلّل confidence وما تخترعش رقم.
-6. why: جملة قصيرة بالعامية: شفت إيه وليه.`;
+6. why: جملة قصيرة بالعامية: شفت إيه وليه.
+7. «تم تحويل X جنيه لرقم ... مصاريف الخدمة ١ جنيه» (فودافون كاش، شاشة موبايل أو نوكيا أو «الدفع تم بنجاح») = إيصال بمبلغ X.
+8. المبلغ ممكن يتبعت على كذا إيصال وبعدين المحل يكتب «تم ٥٠٠٠٠ فلان» أو يرد «تم» على طلب العميل («39930» أو «40» يعني ٤٠٬٠٠٠). دي عملية واحدة بالمجموع: الرسالة دي تاخد المجموع، وof = أرقام الإيصالات اللي جواها. ما تحسبش الإيصالات تاني.
+9. الرسائل المعاد توجيهها من المحل = من المحل.
+10. آلة حاسبة «أ+ب+…−ج=الناتج» = كشف حساب المحل: أول رقم = الرصيد اللي قبله، الموجب = اتبعت للعميل، السالب = اتدفع، والناتج = الرصيد الجديد. مش عملية جديدة (ignore).`;
 
 /* ---------- output shapes ---------- */
 const KIND = { type: 'string', enum: ['sent', 'received', 'ignore'] };
@@ -35,15 +39,16 @@ const obj = (properties) => ({ type: 'object', properties, required: Object.keys
 
 export const TASKS = {
   image: {
-    instruction: 'حلّل الصورة.',
+    instruction: 'حلّل الصورة. لو آلة حاسبة: calc.terms = كل الأرقام بإشاراتها بالترتيب (اقرا الأرقام المكسورة على سطرين كرقم واحد)، وcalc.total = الناتج أو null. لو مش آلة حاسبة: calc = null.',
     maxTokens: 4096,
     schema: obj({ is_transfer: { type: 'boolean' }, kind: KIND, amount: NUM_OR_NULL, confidence: { type: 'number' }, unclear: { type: 'boolean' },
-      app: { type: 'string' }, ref: { type: 'string' }, summary: { type: 'string' }, why: { type: 'string' } }),
+      app: { type: 'string' }, ref: { type: 'string' }, summary: { type: 'string' }, why: { type: 'string' },
+      calc: { anyOf: [{ type: 'null' }, obj({ terms: { type: 'array', items: { type: 'number' } }, total: NUM_OR_NULL })] } }),
   },
   text: {
-    instruction: 'صنّف كل رسالة نصية. الصور متحللة ومكتوبة للاستئناس بس (عشان التكرار)، ما ترجعهاش. dup_of = رقم الرسالة المكررة معاها أو null.',
+    instruction: 'صنّف كل رسالة نصية. الصور متحللة ومكتوبة للاستئناس بس، ما ترجعهاش. dup_of = رقم رسالة مكررة معاها أو null. of = أرقام الإيصالات اللي الرسالة دي مجموعها (قاعدة ٨) أو [].',
     maxTokens: 16000,
-    schema: obj({ items: { type: 'array', items: obj({ i: { type: 'integer' }, kind: KIND, amount: NUM_OR_NULL, confidence: { type: 'number' }, dup_of: INT_OR_NULL, why: { type: 'string' } }) } }),
+    schema: obj({ items: { type: 'array', items: obj({ i: { type: 'integer' }, kind: KIND, amount: NUM_OR_NULL, confidence: { type: 'number' }, dup_of: INT_OR_NULL, of: { type: 'array', items: { type: 'integer' } }, why: { type: 'string' } }) } }),
   },
   checkpoints: {
     instruction: 'طلّع «نقاط البداية»: رسائل بتثبّت الرصيد عند رقم ويبدأ الحساب بعدها ("بدايتنا ١٠٠٠٠"، "الحساب كده ٣٠٠٠ عليك"، "قفلنا على ٢٠٠٠"). مش بداية: تحويل عادي، طلب، سؤال، رقم موبايل أو عملية. dir: client_owes لو المبلغ على العميل، shop_owes لو ليه.',

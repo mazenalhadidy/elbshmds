@@ -3,6 +3,7 @@
 import {
   esc, fmt, num, clamp, norm, KIND, IMG, MEDIA, parse, strip, attachment, keywordCheckpoints, prep, applyAnswer, weak,
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
+  linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression,
 } from './core.js';
 
 const $ = s => document.querySelector(s);
@@ -16,6 +17,9 @@ const KEEP = 39;                    // newest corrections sent as they are; olde
 const IMG_AT_ONCE = 4, TEXT_AT_ONCE = 2, BATCH = 40;
 let settings = structuredClone(DEF), examples = [], key = '';
 let msgs = [], media = new Map(), shop = new Set(), cps = [], openIdx = -1, rows = [], filter = 'money', busy = false, chatName = '', stopped = false, spent = 0;
+let cp = null, startIdx = -1;               // the chosen starting point; where the analysis starts (before it when checking a statement)
+const imgCache = new Map();                 // message index -> the image answer (never pay twice for the same picture)
+const STATEMENT_SCAN = 6;                   // how many of the last pictures to check for a calculator statement
 const has = f => media.has(f);
 
 /* ===== server ===== */
@@ -86,7 +90,7 @@ $('#file').addEventListener('change', async e => {
       txt = await chat.async('string');
       for (const z of ents) { const b = z.name.split('/').pop(); if (MEDIA.test(b)) media.set(b.toLowerCase(), z); }
     } else txt = await f.text();
-    msgs = parse(txt);
+    msgs = parse(txt); imgCache.clear();
     if (!msgs.length) throw new Error('ده مش ملف تصدير واتساب.');
     chatName = f.name.replace(/\.(zip|txt)$/i, '').replace(/^WhatsApp Chat( with| -)?\s*/i, '');
     $('#fileLabel').textContent = `${f.name} · ${msgs.length} رسالة · ${[...media.keys()].filter(k => IMG.test(k)).length} صورة`;
@@ -118,31 +122,50 @@ async function aiCheckpoints() {
   return (v?.checkpoints || []).map(c => ({ i: Number(c.i), amount: num(c.amount), dir: c.dir, conf: clamp(c.confidence), why: String(c.why || '') }))
     .filter(c => msgs[c.i] && c.amount != null && c.conf >= 0.6).sort((a, b) => a.i - b.i);
 }
+/** Calculator screenshots near the end of the chat (the latest statement). Answers are cached for the analysis. */
+async function imageStatements() {
+  const all = msgs.map(m => prep(m, { shop, has })), out = [];
+  for (const r of all.filter(x => x.img).slice(-STATEMENT_SCAN).reverse()) {
+    const v = await analyzeImage(r, all);
+    if (v?.calc?.terms?.length >= 2) {
+      const total = num(v.calc.total) ?? v.calc.terms.reduce((a, x) => a + x, 0);
+      out.push(statementCp(r.i, { terms: v.calc.terms.map(Number), total }));
+      break;                                 // the newest statement is enough
+    }
+  }
+  return out;
+}
 async function findOpening() {
-  cps = keywordCheckpoints(msgs, settings.keywords); showOpening(false);
+  const typed = statementCheckpoints(msgs);
+  cps = mergeCheckpoints(keywordCheckpoints(msgs, settings.keywords), typed); showOpening(false);
   if (!key) return;
-  $('#openBox').insertAdjacentHTML('beforeend', '<p class="note">بدوّر على البداية…</p>');
+  $('#openBox').insertAdjacentHTML('beforeend', '<p class="note">بدوّر على البداية وكشف الحساب…</p>');
   $('#go').disabled = true;
-  try { const found = await aiCheckpoints(); if (found.length) cps = found; } catch { /* keep the keyword result */ }
+  let found = [], pics = [];
+  try { found = await aiCheckpoints(); } catch { /* keep the keyword result */ }
+  try { pics = await imageStatements(); } catch { /* no picture statement */ }
+  cps = mergeCheckpoints(found.length ? found : keywordCheckpoints(msgs, settings.keywords), typed, pics);
   $('#go').disabled = false; showOpening(true);
 }
 function showOpening(final) {
   const box = $('#openBox');
   if (!cps.length) {
-    openIdx = -1; $('#openAmt').value = 0; $('#openDir').value = '1';
+    openIdx = -1; cp = null; $('#openAmt').value = 0; $('#openDir').value = '1';
     box.innerHTML = final ? '<p class="warnbox">مفيش رسالة بداية: هحسب من أول المحادثة. اكتب الرصيد لو فيه.</p>' : ''; return;
   }
   pickCp(cps.length - 1);
   const c = cps[cps.length - 1], m = msgs[c.i];
   const opts = cps.map((x, k) => `<option value="${k}" ${k === cps.length - 1 ? 'selected' : ''}>${esc(msgs[x.i].ts)} · ${fmt(x.amount)}</option>`).reverse().join('');
-  box.innerHTML = `<p class="note">آخر بداية · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote" id="cpText">${esc(strip(m.text))}</div>
+  box.innerHTML = `<p class="note">آخر بداية · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote" id="cpText">${esc(cpText(c))}</div>
   <p class="note" id="cpWhy">${esc(c.why)}</p>
   ${cps.length > 1 ? `<label class="note" for="cpSel">مش دي؟ (${cps.length} بدايات)</label><select id="cpSel">${opts}</select>` : ''}
-  <p class="note">بحسب من بعدها. اتأكد من المبلغ:</p>`;
+  <p class="note" id="cpHow">${howText(c)}</p>`;
 }
+const cpText = c => (c.terms ? expression(c.terms) + '\n=' + fmt(c.stated) : strip(msgs[c.i].text));
+const howText = c => (c.terms ? 'هراجع الكشف ده على المحادثة، وأكمّل الحساب من ناتجه:' : 'بحسب من بعدها. اتأكد من المبلغ:');
 function pickCp(k) {
-  const c = cps[k]; openIdx = c.i; $('#openAmt').value = c.amount; $('#openDir').value = c.dir === 'shop_owes' ? '-1' : '1';
-  if ($('#cpText')) { $('#cpText').textContent = strip(msgs[c.i].text); $('#cpWhy').textContent = c.why; }
+  const c = cps[k]; cp = c; openIdx = c.i; $('#openAmt').value = c.amount; $('#openDir').value = c.dir === 'shop_owes' ? '-1' : '1';
+  if ($('#cpText')) { $('#cpText').textContent = cpText(c); $('#cpWhy').textContent = c.why; $('#cpHow').textContent = howText(c); }
 }
 $('#openBox').addEventListener('change', e => { if (e.target.id === 'cpSel') pickCp(Number(e.target.value)); });
 const openVal = () => (num($('#openAmt').value) || 0) * Number($('#openDir').value);
@@ -163,16 +186,31 @@ async function shrink(blob) {                       // max 1600 px JPEG: smaller
 const toB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
 const fail = (r, e) => { r.state = 'error'; r.kind = 'ignore'; r.flag = true; r.why = 'خطأ' + (e?.message ? ': ' + e.message : '') + '. اضغط «أعد».'; r.ai = { kind: 'ignore', amount: null }; };
 
+async function loadBlob(r) {
+  if (!r.blob) { const b = await media.get(r.file.toLowerCase()).async('blob'); r.blob = new Blob([b], { type: mime(r.file) }); r.url = URL.createObjectURL(r.blob); }
+}
+/** The AI's answer for a picture (cached by message). A weak answer is checked again by the strong model. */
+async function analyzeImage(r, list, training) {
+  if (imgCache.has(r.i)) return imgCache.get(r.i);
+  await loadBlob(r);
+  const image = await toB64(await shrink(r.blob)), input = imageInput(r, list);
+  let v = await ai('image', input, { image, training });
+  if (weak(v) && !(v?.calc?.terms?.length)) { try { const v2 = await ai('image', input, { image, training, tier: 'strong' }); if (v2) v = { ...v2, esc: true }; } catch { /* keep the first answer */ } }
+  imgCache.set(r.i, v);
+  return v;
+}
 async function doImage(r, list, training) {
   try {
-    if (!r.blob) { const b = await media.get(r.file.toLowerCase()).async('blob'); r.blob = new Blob([b], { type: mime(r.file) }); r.url = URL.createObjectURL(r.blob); }
-    const image = await toB64(await shrink(r.blob)), input = imageInput(r, list);
-    let v = await ai('image', input, { image, training });
-    if (weak(v)) { try { const v2 = await ai('image', input, { image, training, tier: 'strong' }); if (v2) { v = v2; r.esc = true; } } catch { /* keep the first answer */ } }
-    applyAnswer(r, v);
+    await loadBlob(r);
+    const v = await analyzeImage(r, list, training);
+    applyAnswer(r, v); r.esc = !!v.esc;
     if (v.is_transfer === false) { r.kind = 'ignore'; r.ai.kind = 'ignore'; }
     r.summary = String(v.summary || ''); r.ref = String(v.ref || '').replace(/\s/g, ''); r.app = String(v.app || '');
     if (v.unclear) r.flag = true;
+    if (v.calc) {                            // calculator: a statement or just its result, never a new transfer
+      r.kind = 'ignore'; r.ai.kind = 'ignore'; r.flag = false; r.amount = null;
+      r.why = v.calc.terms?.length >= 2 ? `كشف حساب: ${expression(v.calc.terms.map(Number))} = ${fmt(num(v.calc.total) ?? 0)}` : 'ناتج الآلة الحاسبة';
+    }
   } catch (e) { fail(r, e); }
 }
 async function doText(batch, list, training) {
@@ -184,6 +222,7 @@ async function doText(batch, list, training) {
     for (const it of v?.items || []) {
       const r = by.get(Number(it.i)); if (!r) continue;
       applyAnswer(r, it);
+      r.of = Array.isArray(it.of) ? it.of.map(Number).filter(j => j !== r.i) : [];
       if (it.dup_of != null && r.kind !== 'ignore') { r.why += ` (مكررة مع #${it.dup_of})`; r.kind = 'ignore'; r.ai.kind = 'ignore'; }
       by.delete(r.i);
     }
@@ -199,12 +238,16 @@ async function runAnalysis(list, onStep = () => {}) {
   await pool(imgs, IMG_AT_ONCE, async r => { await doImage(r, list, training); onStep(steps); }, () => stopped);
   await pool(batches, TEXT_AT_ONCE, async b => { await doText(b, list, training); onStep(steps); }, () => stopped);
   dedupeRefs(list);
+  linkGroups(list);
 }
 $('#go').addEventListener('click', async () => {
   if (busy) return;
   if (!shop.size) { $('#aiNote').textContent = 'اختار اسم المحل الأول.'; show('#aiNote'); return; }
   show('#aiNote', false); busy = true; stopped = false; spent = 0; $('#go').disabled = true;
-  rows = msgs.slice(openIdx + 1).map(m => prep(m, { shop, has }));
+  // checking a statement: start at the starting point before it (or the chat's first message)
+  startIdx = cp?.terms ? Math.max(-1, ...cps.filter(c => c.i < cp.i).map(c => c.i)) : openIdx;
+  rows = msgs.slice(startIdx + 1).map(m => prep(m, { shop, has }));
+  for (const r of rows) if (r.i === openIdx || cps.some(c => c.i === r.i)) { r.state = 'done'; r.kind = 'ignore'; r.img = false; r.why = cp && r.i === openIdx ? 'نقطة البداية' : 'نقطة بداية'; r.start = true; }
   show('#sum'); show('#step3'); render();
   let done = 0;
   await runAnalysis(rows, total => { done++; $('#prog').style.width = (100 * done / Math.max(1, total)) + '%'; $('#progText').textContent = `بحلل… ${done} من ${total}`; renderSoon(); });
@@ -268,14 +311,37 @@ async function mergeOld() {
 
 /* ===== results ===== */
 let raf = 0; const renderSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
+/** The final calculation (as the shop writes it) and, for a statement, how it matches the chat. */
+function finalCalc() {
+  const after = transactions(rows, { after: openIdx });
+  if (!cp?.terms) return { eq: equation(openVal(), after) };
+  const rec = reconcile({ terms: cp.terms, total: cp.stated }, transactions(rows, { before: openIdx }), { midway: startIdx < 0 });
+  return { rec, eq: after.length ? equation(openVal(), after) : rec.eq };
+}
+function renderCheck(rec) {
+  if (!rec) return '';
+  const ok = rec.items.filter(x => x.status === 'ok').length, miss = rec.items.filter(x => x.status === 'missing');
+  const out = [`الكشف: ${ok} من ${rec.items.length} بند لاقيتهم في المحادثة ✓`];
+  if (rec.before.length) out.push(`${rec.before.length} بند قبل بداية المحادثة (مش غلط)`);
+  if (miss.length) out.push(`⚠️ في الكشف ومش في المحادثة: ${miss.map(x => fmt(x.amount)).join('، ')}`);
+  if (rec.extra.length) out.push(`⚠️ في المحادثة ومش في الكشف: ${rec.extra.map(x => fmt(x.amount)).join('، ')}`);
+  if (!rec.arithmeticOk) out.push('⚠️ جمع الكشف نفسه غلط');
+  out.push(rec.matches ? `✓ الناتج ${fmt(rec.stated)} مظبوط` : `⚠️ حسابي ${fmt(rec.eq.total)} والكشف ${fmt(rec.stated)} (فرق ${fmt(rec.eq.total - rec.stated)})`);
+  return out.join('\n');
+}
 function render() {
-  const c = totals(rows, openVal());
+  const c = totals(rows, openVal(), openIdx), fc = finalCalc();
+  $('#eq').textContent = fc.eq.text; $('#eqTotal').textContent = fmt(fc.eq.total);
+  $('#check').textContent = renderCheck(fc.rec); show('#check', !!fc.rec);
+  const tag = new Map();
+  if (fc.rec) { for (const it of fc.rec.items) for (const i of it.found || []) tag.set(i, '✓ في الكشف'); for (const x of fc.rec.extra) tag.set(x.i, '⚠️ مش في الكشف'); }
+  for (const r of rows) r.tag = tag.get(r.i) || (r.partOf != null ? `ضمن #${r.partOf}` : '');
   $('#debt').textContent = fmt(Math.abs(c.debt)) + ' ج.م';
   $('#debtLabel').textContent = c.debt >= 0 ? 'على العميل' : 'للعميل عندنا';
   $('#sOpen').textContent = fmt(openVal()); $('#sSent').textContent = fmt(c.s); $('#sRec').textContent = fmt(c.rc);
   $('#revN').textContent = c.rev || '';
   const needs = r => (r.flag && !r.ok) || r.state === 'error';
-  const vis = rows.filter(r => !r.sys && (filter === 'all' || (filter === 'review' ? needs(r) : r.kind !== 'ignore' || needs(r) || r.dirty || r.state !== 'done')));
+  const vis = rows.filter(r => !r.sys && !r.start && (filter === 'all' || (filter === 'review' ? needs(r) : r.kind !== 'ignore' || needs(r) || r.dirty || r.state !== 'done')));
   $('#list').innerHTML = vis.length ? vis.map(r => card(r, c.bal.get(r.i))).join('') : `<p class="note">${filter === 'review' ? 'مفيش حاجة للمراجعة.' : 'مفيش معاملات لسه.'}</p>`;
 }
 function card(r, bal) {
@@ -288,7 +354,7 @@ ${r.url ? `<button class="thumb" data-act="zoom" aria-label="كبّر"><img src=
 ${r.text ? `<p class="msg">${esc(r.text)}</p>` : ''}
 <div class="ai">${pend ? 'بحلل…' : esc(r.why) || '—'} ${meta}</div>
 <div class="ctl"><div class="seg">${seg}</div><input class="amt" inputmode="decimal" value="${r.amount ?? ''}" placeholder="المبلغ" aria-label="المبلغ" ${pend ? 'disabled' : ''}></div>
-${r.state === 'done' ? `<div class="bal">بعدها: ${fmt(Math.abs(bal ?? 0))} ${(bal ?? 0) >= 0 ? 'على العميل' : 'للعميل'}</div>` : ''}
+${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}${r.state === 'done' && r.i > openIdx && r.partOf == null ? `<div class="bal">بعدها: ${fmt(Math.abs(bal ?? 0))} ${(bal ?? 0) >= 0 ? 'على العميل' : 'للعميل'}</div>` : ''}
 ${r.dirty ? '<div class="fix"><input class="why" placeholder="ليه؟ (اختياري)"><button data-act="learn">احفظ التصحيح</button></div>' : ''}
 <div class="acts">${r.flag && !r.ok && !r.dirty && !pend ? '<button class="ghost" data-act="ok">صح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعد</button>' : ''}</div>
 </article>`;
@@ -323,10 +389,9 @@ $('#filters').addEventListener('click', e => {
 });
 $('#zoom').addEventListener('click', () => { $('#zoom').style.display = 'none'; });
 $('#copy').addEventListener('click', async () => {
-  const c = totals(rows, openVal()), last = rows.length ? rows[rows.length - 1].ts : '';
-  const t = `حساب ${chatName}${last ? ' حتى ' + last : ''}\nالبداية: ${fmt(openVal())} ج.م\nأرسلنا: ${fmt(c.s)} ج.م (${c.ns})\nاستلمنا: ${fmt(c.rc)} ج.م (${c.nr})\n${c.debt >= 0 ? 'على العميل' : 'للعميل عندنا'}: ${fmt(Math.abs(c.debt))} ج.م${c.rev ? `\n⚠️ ${c.rev} للمراجعة` : ''}`;
-  try { await navigator.clipboard.writeText(t); $('#copy').textContent = 'اتنسخ ✓'; } catch { $('#copy').textContent = 'النسخ مش متاح'; }
-  setTimeout(() => { $('#copy').textContent = 'انسخ الملخص'; }, 2000);
+  const fc = finalCalc();
+  try { await navigator.clipboard.writeText(fc.eq.text); $('#copy').textContent = 'اتنسخ ✓'; } catch { $('#copy').textContent = 'النسخ مش متاح'; }
+  setTimeout(() => { $('#copy').textContent = 'انسخ الحساب'; }, 2000);
 });
 
 /* ===== teaching: rules, summary, keywords ===== */

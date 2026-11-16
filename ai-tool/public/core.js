@@ -115,12 +115,14 @@ export function dedupeRefs(list) {
   }
 }
 
-/** Totals + the running balance after each row. `opening` is signed (+ = client owes). */
-export function totals(rows, opening) {
+/** Totals + the running balance after each row. `opening` is signed (+ = client owes). Rows up to `fromI` only get checked, not counted. */
+export function totals(rows, opening, fromI = -Infinity) {
   let s = 0, rc = 0, rev = 0, ns = 0, nr = 0, run = opening; const bal = new Map();
+  const cov = covered(rows);
   for (const r of rows) {
     if (r.state !== 'done') continue;
     if (r.flag && !r.ok) rev++;
+    if (r.i <= fromI || cov.has(r.i)) continue;
     if (r.amount > 0) {
       if (r.kind === 'sent') { s += r.amount; run += r.amount; ns++; }
       else if (r.kind === 'received') { rc += r.amount; run -= r.amount; nr++; }
@@ -162,4 +164,111 @@ export function trainingText(settings, examples) {
 export async function pool(list, n, fn, stop = () => false) {
   let k = 0;
   await Promise.all(Array.from({ length: Math.min(n, list.length) }, async () => { while (k < list.length && !stop()) await fn(list[k++]); }));
+}
+
+/* =====================================================================
+   The shop's own calculation: "1,171,035+22,150+…−311,000 = 1,857,125"
+   - a statement (calculator line) = first number is the previous balance, the rest are the
+     transactions (+ sent, − received), the result is the new balance
+   - split transfers: several receipts + «تم ٥٠٠٠٠» = ONE term of 50,000
+   - a chat export often starts in the middle: statement terms older than the chat are fine
+   ===================================================================== */
+const counted = r => r.state === 'done' && r.amount > 0 && (r.kind === 'sent' || r.kind === 'received');
+
+/** Rows that are part of a total stated by another row («تم ٥٠٠٠٠» covering 3 receipts). */
+export function covered(rows) {
+  const byI = new Map(rows.map(r => [r.i, r])), out = new Set();
+  for (const r of rows) if (counted(r) && Array.isArray(r.of)) for (const j of r.of) {
+    const p = byI.get(Number(j));
+    if (p && p !== r && counted(p) && p.kind === r.kind) out.add(p.i);
+  }
+  return out;
+}
+
+/** Mark the parts of each total; flag a total whose parts don't add up. Call after the analysis. */
+export function linkGroups(rows) {
+  const byI = new Map(rows.map(r => [r.i, r])), cov = covered(rows);
+  for (const r of rows) delete r.partOf;
+  for (const r of rows) if (counted(r) && Array.isArray(r.of)) {
+    const parts = r.of.map(j => byI.get(Number(j))).filter(p => p && cov.has(p.i) && p.kind === r.kind);
+    for (const p of parts) p.partOf = r.i;
+    const sum = parts.reduce((a, p) => a + p.amount, 0);
+    if (parts.length && Math.abs(sum - r.amount) >= 1) { r.flag = true; r.why += ` (الإيصالات مجموعها ${fmt(sum)} مش ${fmt(r.amount)})`; }
+  }
+}
+
+/** The transactions as the shop writes them: one signed number per operation, in chat order. */
+export function transactions(rows, { after = -Infinity, before = Infinity } = {}) {
+  const cov = covered(rows);
+  return rows.filter(r => counted(r) && !cov.has(r.i) && r.i > after && r.i < before)
+    .map(r => ({ i: r.i, amount: r.kind === 'sent' ? r.amount : -r.amount }));
+}
+
+const N = '\\d[\\d,]*(?:\\.\\d+)?';
+/** A typed calculator line "1,171,035+22,150-311,000=1,857,125" -> { terms, total }, or null. */
+export function parseStatement(text) {
+  const t = clean(String(text || '')).replace(/[−–—]/g, '-').replace(/[×x]/g, '*').replace(/٬/g, ',').replace(/\s+/g, '');
+  const m = t.match(new RegExp(`(-?${N}(?:[+-]${N}){2,})(?:=(-?${N}))?`));
+  if (!m || !m[1].includes('+') || /\*/.test(m[0])) return null;
+  const terms = m[1].match(new RegExp(`[+-]?${N}`, 'g')).map(x => Number(x.replace(/,/g, '')));
+  if (!terms.some(v => Math.abs(v) >= 100)) return null;
+  const sum = terms.reduce((a, v) => a + v, 0);
+  return { terms, total: m[2] != null ? Number(m[2].replace(/,/g, '')) : sum };
+}
+
+/** Starting points from statements typed in the chat. */
+export function statementCheckpoints(msgs) {
+  const out = [];
+  for (const m of msgs) {
+    if (m.sys || !m.sender) continue;
+    const st = parseStatement(m.text);
+    if (st) out.push(statementCp(m.i, st));
+  }
+  return out;
+}
+export const statementCp = (i, st) => ({ i, amount: Math.abs(st.total), dir: st.total < 0 ? 'shop_owes' : 'client_owes', conf: 1, terms: st.terms, stated: st.total, why: 'كشف حساب (آلة حاسبة)' });
+
+/** Merge starting points found in different ways (same message -> the statement wins). */
+export function mergeCheckpoints(...lists) {
+  const by = new Map();
+  for (const c of lists.flat()) { const old = by.get(c.i); if (!old || (c.terms && !old.terms)) by.set(c.i, c); }
+  return [...by.values()].sort((a, b) => a.i - b.i);
+}
+
+/** "1,171,035+22,150−311,000" (as the shop writes it). */
+export function expression(terms) {
+  return terms.map((v, k) => (k === 0 ? (v < 0 ? '-' : '') : v < 0 ? '−' : '+') + fmt(Math.abs(v))).join('');
+}
+/** Final calculation from a starting balance: { terms, total, text } — text is ready to paste in WhatsApp. */
+export function equation(base, txs) {
+  const terms = [base, ...txs.map(t => t.amount)], total = terms.reduce((a, v) => a + v, 0);
+  return { terms, total, text: `${expression(terms)}\n=${fmt(total)}` };
+}
+
+/**
+ * Check a statement against the chat. `txs` = the chat's transactions before the statement.
+ * Each chat transaction is matched to one term (same amount), or a run of consecutive transactions to one term
+ * (receipts not grouped). Terms before the first match are "before the chat" when the export starts mid-way.
+ */
+export function reconcile(st, txs, { midway = true } = {}) {
+  const terms = st.terms.slice(1), used = new Array(terms.length).fill(null), txUsed = new Array(txs.length).fill(false);
+  const same = (a, b) => Math.abs(a - b) < 1;
+  txs.forEach((t, k) => { const j = terms.findIndex((v, j) => used[j] === null && same(v, t.amount)); if (j >= 0) { used[j] = [t.i]; txUsed[k] = true; } });
+  for (let j = 0; j < terms.length; j++) if (used[j] === null) {            // a term = several consecutive transactions
+    for (let a = 0; a < txs.length && used[j] === null; a++) {
+      let sum = 0;
+      for (let b = a; b < Math.min(txs.length, a + 8) && !txUsed[b]; b++) {
+        sum += txs[b].amount;
+        if (b > a && same(sum, terms[j])) { used[j] = txs.slice(a, b + 1).map(t => t.i); for (let x = a; x <= b; x++) txUsed[x] = true; break; }
+      }
+    }
+  }
+  const first = used.findIndex(Boolean);
+  const items = terms.map((v, j) => ({ amount: v, found: used[j], status: used[j] ? 'ok' : (midway && (first < 0 || j < first)) ? 'before' : 'missing' }));
+  const extra = txs.filter((_, k) => !txUsed[k]);
+  const before = items.filter(x => x.status === 'before').map(x => x.amount);
+  // the calculation rebuilt from the chat: previous balance + older terms + what the chat shows
+  const eq = equation(st.terms[0], [...before.map(amount => ({ amount })), ...txs]);
+  const sumTerms = st.terms.reduce((a, v) => a + v, 0);
+  return { items, extra, before, eq, stated: st.total, arithmeticOk: same(sumTerms, st.total), matches: same(eq.total, st.total) };
 }

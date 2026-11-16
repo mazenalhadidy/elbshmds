@@ -65,7 +65,7 @@ test('no training: the breakpoint sits on the rules; schemas are strict', () => 
   const r = buildRequest(validate({ task: 'text', input: 'x' }));
   assert.equal(r.system.length, 1);
   assert.equal(r.system[0].cache_control.type, 'ephemeral');
-  const strict = s => s.type !== 'object' || (s.additionalProperties === false && Object.keys(s.properties).every(k => s.required.includes(k)) && Object.values(s.properties).every(p => strict(p.items || p)));
+  const strict = s => s.type !== 'object' || (s.additionalProperties === false && Object.keys(s.properties).every(k => s.required.includes(k)) && Object.values(s.properties).every(p => (p.anyOf || [p]).every(q => strict(q.items || q))));
   for (const t of Object.values(TASKS)) assert.ok(strict(t.schema));
 });
 
