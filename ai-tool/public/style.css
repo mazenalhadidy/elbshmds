@@ -78,3 +78,8 @@ ol{margin:6px 0;padding-inline-start:22px}
 /* calculator lines have no spaces: let them wrap anywhere instead of widening the page */
 .quote,.ai,.check,.msg,.bal{overflow-wrap:anywhere}
 .quote{direction:ltr;text-align:right}
+.or{text-align:center;color:var(--mute);margin:8px 0}
+#pasteText{margin-top:8px;min-height:70px}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:8px}
+.thumbs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+label.file.drag{background:var(--v);color:#fff}

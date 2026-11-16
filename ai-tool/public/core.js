@@ -135,7 +135,7 @@ export function totals(rows, opening, fromI = -Infinity) {
 const label = r => (r.side === 'shop' ? 'المحل' : 'العميل') + ' (' + r.sender + ')';
 /** Text lines sent to the AI for a range of rows (images appear as their analysis, for duplicate detection). */
 export const lines = list => list.filter(x => !x.sys).map(x => x.img
-  ? `#${x.i} | ${x.ts} | ${label(x)} | [صورة: ${x.state === 'done' ? KIND[x.kind] + ' ' + (x.amount ?? '') + ' — ' + (x.summary || '') : '؟'}]`
+  ? `#${x.i} | ${x.ts} | ${label(x)} | [صورة: ${x.calc ? (x.calc.terms.length >= 2 ? 'آلة حاسبة ' + expression(x.calc.terms) + ' = ' + fmt(x.calc.total) : 'ناتج آلة حاسبة ' + fmt(x.calc.total)) : x.state === 'done' ? KIND[x.kind] + ' ' + (x.amount ?? '') + ' — ' + (x.summary || '') : '؟'}]`
   : `#${x.i} | ${x.ts} | ${label(x)} | ${(x.text || '').replace(/\n/g, ' ⏎ ').slice(0, 400)}`).join('\n');
 /** 3 messages before and after a row (context for an image). */
 export function around(r, list) {

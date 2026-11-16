@@ -86,3 +86,13 @@ test('num + pool', async () => {
   await pool([1, 2, 3, 4, 5, 6], 2, async x => { running++; max = Math.max(max, running); await new Promise(r => setTimeout(r, 5)); seen.push(x); running--; });
   assert.equal(max, 2); assert.equal(seen.length, 6);
 });
+
+test('the AI sees what a calculator picture says', async () => {
+  const { lines } = await import('../public/core.js');
+  const out = lines([
+    { i: 5, ts: '4:01', side: 'shop', sender: 'مختار', img: true, state: 'done', kind: 'ignore', calc: { terms: [1000, 500, -200], total: 1300 } },
+    { i: 6, ts: '4:01', side: 'shop', sender: 'مختار', img: true, state: 'done', kind: 'ignore', calc: { terms: [], total: 1300 } },
+  ]);
+  assert.match(out, /آلة حاسبة 1,000\+500−200 = 1,300/);
+  assert.match(out, /ناتج آلة حاسبة 1,300/);
+});

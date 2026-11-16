@@ -25,7 +25,7 @@
 </div>
 <main>
 <div class="top"><h1>مدقق الديون</h1><button class="ghost" id="logout">خروج</button></div>
-<p class="sub">ارفع محادثة العميل، أقولك عليه كام.</p>
+<p class="sub">ارفع المحادثة أو الصق الصور، أقولك الحساب.</p>
 
 <section class="card" id="step1">
   <h2>١. المحادثة</h2>
@@ -33,6 +33,14 @@
     <input type="file" id="file" accept=".zip,.txt,application/zip,text/plain">
     <span id="fileLabel">اختر ملف التصدير (.zip مع الوسائط)</span>
   </label>
+  <p class="or">أو</p>
+  <label class="file" id="picsDrop">
+    <input type="file" id="pics" accept="image/*" multiple>
+    <span id="picsLabel">صور ولقطات شاشة (اختار، أو الصق / اسحب هنا)</span>
+  </label>
+  <textarea id="pasteText" rows="3" placeholder="الصق رسائل منسوخة من واتساب (اختياري)"></textarea>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="acts"><button id="usePics" class="hide">جهّز</button><button class="ghost hide" id="clearPics">امسح</button></div>
   <details>
     <summary>إزاي أصدّرها؟</summary>
     <ol><li>افتح المحادثة ← الاسم فوق (آيفون) أو ⋮ ← المزيد (أندرويد).</li><li>«تصدير الدردشة» ← «إرفاق/تضمين الوسائط».</li><li>احفظ في الملفات وارجع هنا.</li></ol>
@@ -42,16 +50,18 @@
 
 <section class="card hide" id="step2">
   <h2>٢. مين المحل؟</h2>
-  <p class="note">اختار أسماء المحل والموظفين. الباقي = العميل.</p>
+  <p class="note">اختار أسماء المحل والموظفين. الباقي = العميل. وأنا هلاقي آخر قفلة حساب لوحدي.</p>
   <div class="chips" id="senders"></div>
-  <h2 style="margin-top:18px">رصيد البداية</h2>
-  <div id="openBox"></div>
-  <div class="grid2">
-    <input id="openAmt" inputmode="decimal" class="amt" aria-label="مبلغ البداية">
-    <select id="openDir" aria-label="اتجاه البداية"><option value="1">على العميل</option><option value="-1">للعميل</option></select>
-  </div>
   <div class="acts"><button id="go">حلّل</button></div>
   <p id="aiNote" class="warnbox hide"></p>
+  <div id="openRow" class="hide">
+    <h2 style="margin-top:18px">البداية</h2>
+    <div id="openBox"></div>
+    <div class="grid2">
+      <input id="openAmt" inputmode="decimal" class="amt" aria-label="رصيد البداية">
+      <select id="openDir" aria-label="اتجاه البداية"><option value="1">على العميل</option><option value="-1">للعميل</option></select>
+    </div>
+  </div>
 </section>
 
 <section class="card hide" id="sum" aria-live="polite">
@@ -86,7 +96,7 @@
   <p class="note" id="exN"></p>
   <div id="learnedBox" class="hide"><h2 style="margin-top:12px">خلاصة التصحيحات القديمة</h2>
     <textarea id="learned" rows="6" aria-label="خلاصة التصحيحات القديمة"></textarea></div>
-  <details><summary>كلمات البداية</summary>
+  <details><summary>كلمات بتساعدني ألاقي القفلة (اختياري)</summary>
     <input id="kw" aria-label="كلمات البداية مفصولة بفاصلة">
   </details>
   <p class="note" id="store"></p>
