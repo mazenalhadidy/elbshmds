@@ -88,3 +88,5 @@ label.file.drag{background:var(--v);color:#fff}
 /* the sign always stays in front of its number, also inside Arabic (right-to-left) text */
 .t{direction:ltr;unicode-bidi:isolate}
 .quote.expr{direction:ltr;text-align:right}
+/* calculations read from the LEFT, like a calculator */
+.calc,.quote.expr{text-align:left}

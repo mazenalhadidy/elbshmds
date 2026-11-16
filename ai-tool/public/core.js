@@ -73,7 +73,7 @@ export function keywordCheckpoints(msgs, keywords) {
   for (const m of msgs) {
     if (m.sys || !m.sender) continue;
     const t = norm(m.text), k = kws.find(k => t.includes(k));
-    if (k) { const a = amountAfter(m.text, k); if (a != null) out.push({ i: m.i, amount: a, dir: 'client_owes', conf: 1, why: 'فيها «' + k + '»' }); }
+    if (k) { const a = amountAfter(m.text, k); if (a != null) out.push({ i: m.i, amount: a, dir: 'client_owes', conf: 1, why: 'تحتوي على «' + k + '»' }); }
   }
   return out;
 }
@@ -87,10 +87,10 @@ export function prep(m, { shop, has }) {
   const a = attachment(m, has);
   if (a) {
     r.file = a.file;
-    if (a.missing) return done('المرفق مش في الملف. صدّر مع «إرفاق الوسائط».', true);
+    if (a.missing) return done('المرفق غير موجود في الملف. صدّر المحادثة مع «إرفاق الوسائط».', true);
     if (IMG.test(a.file)) r.img = true;
-    else if (VOICE.test(a.file)) return done('رسالة صوتية: اسمعها وعدّل لو فيها مبلغ.', true);
-    else return done('مرفق مش صورة.');
+    else if (VOICE.test(a.file)) return done('رسالة صوتية: استمع إليها وعدّل إن تضمنت مبلغًا.', true);
+    else return done('مرفق ليس صورة.');
   }
   return r;
 }
@@ -110,7 +110,7 @@ export const weak = v => !v || v.unclear === true || clamp(v.confidence) < 0.75 
 export function dedupeRefs(list) {
   const seen = new Map();
   for (const r of list) if (r.img && r.ref && r.ref.length > 3 && r.kind !== 'ignore') {
-    if (seen.has(r.ref)) { r.kind = 'ignore'; r.why += ` (نفس رقم العملية في #${seen.get(r.ref)})`; }
+    if (seen.has(r.ref)) { r.kind = 'ignore'; r.why += ` (رقم العملية نفسه في #${seen.get(r.ref)})`; }
     else seen.set(r.ref, r.i);
   }
 }
@@ -143,11 +143,11 @@ export function around(r, list) {
   return list.slice(Math.max(0, k - 3), k).concat(list.slice(k + 1, k + 4)).filter(x => !x.sys)
     .map(x => `- ${label(x)}: ${x.img ? '[صورة]' : (x.text || '').slice(0, 140)}`).join('\n') || 'لا يوجد';
 }
-export const imageInput = (r, list) => `من ${label(r)} الساعة ${r.ts}. ${r.text ? 'التعليق: ' + r.text : 'بدون تعليق.'}\nحواليها:\n${around(r, list)}`;
+export const imageInput = (r, list) => `من ${label(r)} الساعة ${r.ts}. ${r.text ? 'التعليق: ' + r.text : 'بدون تعليق.'}\nما حولها:\n${around(r, list)}`;
 
 /** One correction as a line of training. */
 export const exampleLine = e => e.auto ? `- درس: ${e.content}`
-  : `- ${e.side === 'shop' ? 'من المحل' : 'من العميل'} | ${e.content} | فهمتها: ${KIND[e.ai?.kind] || '?'} ${e.ai?.amount ?? ''} | الصح: ${KIND[e.fix.kind]} ${e.fix.amount ?? ''}${e.note ? ' | السبب: ' + e.note : ''}`;
+  : `- ${e.side === 'shop' ? 'من المحل' : 'من العميل'} | ${e.content} | فهمتُها: ${KIND[e.ai?.kind] || '?'} ${e.ai?.amount ?? ''} | الصحيح: ${KIND[e.fix.kind]} ${e.fix.amount ?? ''}${e.note ? ' | السبب: ' + e.note : ''}`;
 
 /** Everything the owner taught (sent as the cached part of the system prompt). Stable during one analysis. */
 export function trainingText(settings, examples) {
@@ -193,7 +193,7 @@ export function linkGroups(rows) {
     const parts = r.of.map(j => byI.get(Number(j))).filter(p => p && cov.has(p.i) && p.kind === r.kind);
     for (const p of parts) p.partOf = r.i;
     const sum = parts.reduce((a, p) => a + p.amount, 0);
-    if (parts.length && Math.abs(sum - r.amount) >= 1) { r.flag = true; r.why += ` (الإيصالات مجموعها ${fmt(sum)} مش ${fmt(r.amount)})`; }
+    if (parts.length && Math.abs(sum - r.amount) >= 1) { r.flag = true; r.why += ` (مجموع الإيصالات ${fmt(sum)} وليس ${fmt(r.amount)})`; }
   }
 }
 

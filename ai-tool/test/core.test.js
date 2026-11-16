@@ -75,7 +75,7 @@ test('training text: rules, summary, unmerged corrections only; stable for cachi
   const settings = { rules: ['قاعدة'], learned: 'خلاصة', keywords: ['بدايتنا'] };
   const examples = [{ merged: true, content: 'XMERGEDX' }, { side: 'client', content: 'دفعت', ai: { kind: 'sent', amount: 5 }, fix: { kind: 'received', amount: 5 } }];
   const t = trainingText(settings, examples);
-  assert.match(t, /1\. قاعدة/); assert.match(t, /خلاصة/); assert.match(t, /الصح: استلمنا منه 5/); assert.doesNotMatch(t, /XMERGEDX/);
+  assert.match(t, /1\. قاعدة/); assert.match(t, /خلاصة/); assert.match(t, /الصحيح: استلمنا منه 5/); assert.doesNotMatch(t, /XMERGEDX/);
   assert.equal(t, trainingText(settings, examples));
   assert.equal(trainingText({ rules: [], learned: '', keywords: [] }, []), '');
 });

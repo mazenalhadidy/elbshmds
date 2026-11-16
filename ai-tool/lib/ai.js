@@ -14,22 +14,22 @@ export const EFFORT = { fast: 'low', strong: 'medium' };          // reading rec
 // $ per 1M tokens: [input, output, cache read, cache write (5 min)] — used for the cost shown after each analysis
 const PRICE = { 'claude-haiku-5-5': [0.10, 0.50, 0.01, 0.125], 'claude-sonnet-5-5': [2, 10, 0.10, 2.5] };
 
-export const RULES = `محاسب لمحل موبايلات مصري (محل الباشمهندس). بتقرأ محادثة واتساب بين المحل وعميل وتحسب دين العميل.
-- الدين = اللي على العميل للمحل (موجب = العميل مدين).
-- sent: المحل حوّل/بعت/شحن للعميل ← الدين يزيد.
-- received: العميل دفع/حوّل للمحل ← الدين يقل.
-- ignore: كلام، سؤال، طلب ("ابعتلي ٥٠٠")، تأكيد وصول، أو عملية اتحسبت قبل كده.
-قواعد:
-1. إيصال من طرف المحل = sent، ومن العميل = received، إلا لو الصورة تثبت العكس.
-2. نفس العملية نص + صورة (نفس المبلغ في وقت قريب) تتحسب مرة واحدة.
-3. من الإيصال خُد مبلغ التحويل بس: مش الرصيد ولا الرسوم ولا رقم العملية أو الموبايل.
-4. "ألف" = ×١٠٠٠، و"ك" بعد الرقم = ×١٠٠٠. الأرقام ممكن تكون عربية.
-5. مش متأكد؟ قلّل confidence وما تخترعش رقم.
-6. why: جملة قصيرة بالعامية: شفت إيه وليه.
-7. «تم تحويل X جنيه لرقم ... مصاريف الخدمة ١ جنيه» (فودافون كاش، شاشة موبايل أو نوكيا أو «الدفع تم بنجاح») = إيصال بمبلغ X.
-8. المبلغ ممكن يتبعت على كذا إيصال وبعدين المحل يكتب «تم ٥٠٠٠٠ فلان» أو يرد «تم» على طلب العميل («39930» أو «40» يعني ٤٠٬٠٠٠). دي عملية واحدة بالمجموع: الرسالة دي تاخد المجموع، وof = أرقام الإيصالات اللي جواها. ما تحسبش الإيصالات تاني.
-9. الرسائل المعاد توجيهها من المحل = من المحل. «صور» = صور ملصوقة من غير مرسل معروف: الافتراضي المحل، إلا لو الصورة بتقول غير كده.
-10. آلة حاسبة «أ+ب+…−ج=الناتج» = كشف حساب المحل: أول رقم = الرصيد اللي قبله، الموجب = اتبعت للعميل، السالب = اتدفع، والناتج = الرصيد الجديد. مش عملية جديدة (ignore).`;
+export const RULES = `أنت محاسب في محل هواتف مصري (محل الباشمهندس). تقرأ محادثة واتساب بين المحل وعميل وتحسب دين العميل.
+- الدين = ما على العميل للمحل (موجب = العميل مدين).
+- sent: حوّل المحل أو أرسل أو شحن للعميل ← يزيد الدين.
+- received: دفع العميل أو حوّل للمحل ← يقل الدين.
+- ignore: كلام عادي، أو سؤال، أو طلب (مثل "ابعتلي ٥٠٠")، أو تأكيد وصول، أو عملية حُسبت من قبل.
+القواعد:
+1. الإيصال المرسل من المحل = sent، ومن العميل = received، إلا إذا أثبتت الصورة العكس.
+2. العملية نفسها نصًّا وصورةً (المبلغ نفسه في وقت متقارب) تُحسب مرة واحدة.
+3. من الإيصال خذ مبلغ التحويل فقط: لا الرصيد ولا الرسوم ولا رقم العملية أو رقم الهاتف.
+4. "ألف" = ×١٠٠٠، وحرف "ك" بعد الرقم = ×١٠٠٠. قد تكون الأرقام عربية.
+5. إن لم تكن متأكدًا فقلّل confidence ولا تخترع رقمًا.
+6. why: جملة قصيرة بالعربية الفصحى: ماذا رأيت ولماذا.
+7. «تم تحويل X جنيه لرقم ... مصاريف الخدمة ١ جنيه» (فودافون كاش، من شاشة هاتف أو نوكيا أو «الدفع تم بنجاح») = إيصال بمبلغ X.
+8. قد يُرسل المبلغ على عدة إيصالات، ثم يكتب المحل «تم ٥٠٠٠٠ فلان» أو يرد بـ«تم» على طلب العميل («39930»، أو «40» بمعنى ٤٠٬٠٠٠). هذه عملية واحدة بالمجموع: تأخذ هذه الرسالة المجموع، وof = أرقام الإيصالات التي يضمها. لا تحسب الإيصالات مرة أخرى.
+9. الرسائل المعاد توجيهها من المحل = من المحل. «صور» = صور ملصقة بلا مرسل معروف: الافتراضي أنها من المحل، إلا إذا دلّت الصورة على غير ذلك.
+10. الآلة الحاسبة «أ+ب+…−ج=الناتج» = كشف حساب المحل: الرقم الأول = الرصيد السابق، والموجب = ما أُرسل للعميل، والسالب = ما دُفع، والناتج = الرصيد الجديد. ليست عملية جديدة (ignore).`;
 
 /* ---------- output shapes ---------- */
 const KIND = { type: 'string', enum: ['sent', 'received', 'ignore'] };
@@ -39,32 +39,32 @@ const obj = (properties) => ({ type: 'object', properties, required: Object.keys
 
 export const TASKS = {
   image: {
-    instruction: 'حلّل الصورة. لو آلة حاسبة: calc.terms = كل الأرقام بإشاراتها بالترتيب (اقرا الأرقام المكسورة على سطرين كرقم واحد)، وcalc.total = الناتج أو null. لو مش آلة حاسبة: calc = null.',
+    instruction: 'حلّل الصورة. إن كانت آلة حاسبة: calc.terms = كل الأرقام بإشاراتها بالترتيب (اقرأ الرقم المقسوم على سطرين رقمًا واحدًا)، وcalc.total = الناتج أو null. وإلا: calc = null.',
     maxTokens: 4096,
     schema: obj({ is_transfer: { type: 'boolean' }, kind: KIND, amount: NUM_OR_NULL, confidence: { type: 'number' }, unclear: { type: 'boolean' },
       app: { type: 'string' }, ref: { type: 'string' }, summary: { type: 'string' }, why: { type: 'string' },
       calc: { anyOf: [{ type: 'null' }, obj({ terms: { type: 'array', items: { type: 'number' } }, total: NUM_OR_NULL })] } }),
   },
   text: {
-    instruction: 'صنّف كل رسالة نصية. الصور متحللة ومكتوبة للاستئناس بس، ما ترجعهاش. dup_of = رقم رسالة مكررة معاها أو null. of = أرقام الإيصالات اللي الرسالة دي مجموعها (قاعدة ٨) أو [].',
+    instruction: 'صنّف كل رسالة نصية. الصور محللة مسبقًا ومذكورة للاستئناس فقط، فلا تُرجعها. dup_of = رقم رسالة مكررة معها أو null. of = أرقام الإيصالات التي تمثل هذه الرسالة مجموعها (القاعدة ٨) أو [].',
     maxTokens: 16000,
     schema: obj({ items: { type: 'array', items: obj({ i: { type: 'integer' }, kind: KIND, amount: NUM_OR_NULL, confidence: { type: 'number' }, dup_of: INT_OR_NULL, of: { type: 'array', items: { type: 'integer' } }, why: { type: 'string' } }) } }),
   },
   closings: {
-    instruction: `افهم المحادثة زي محاسب المحل، مش بكلمات معينة. لاقي كل «قفلة حساب»: مكان الحساب اتقفل عنده على رقم، واللي بعده حساب/يوم جديد بيبدأ من الرقم ده.
-أمثلة: آلة حاسبة بتجمع اللي فات وناتجها (آخر اليوم)، الناتج لوحده بعدها، «الحساب كده/الباقي عندك/قفلنا على/بدايتنا»، رصيد آخر اليوم، أو اتفاق الطرفين على رقم، حتى لو مكتوب بأي صيغة.
-مش قفلة: تحويل، طلب، سؤال، أو رقم في نص الكلام.
-balance = الرصيد بعد القفلة (موجب = على العميل). لو كشف وبعده الناتج لوحده، القفلة هي الكشف. why: ليه دي قفلة.`,
+    instruction: `افهم المحادثة كما يفهمها محاسب المحل، لا بالبحث عن كلمات بعينها. حدّد كل «إقفال للحساب»: موضع أُقفل عنده الحساب على رقم، وما بعده حساب أو يوم جديد يبدأ من هذا الرقم.
+أمثلة: آلة حاسبة تجمع ما سبق مع ناتجها (نهاية اليوم)، أو الناتج وحده بعدها، أو «الحساب كده/الباقي عندك/قفلنا على/بدايتنا»، أو رصيد نهاية اليوم، أو اتفاق الطرفين على رقم، بأي صياغة كانت.
+ليس إقفالًا: التحويل، والطلب، والسؤال، والرقم الوارد في سياق الكلام.
+balance = الرصيد بعد الإقفال (موجب = على العميل). إن جاء كشف ثم الناتج وحده، فالإقفال هو الكشف. why: سبب اعتباره إقفالًا.`,
     maxTokens: 8000,
     schema: obj({ closings: { type: 'array', items: obj({ i: { type: 'integer' }, balance: { type: 'number' }, kind: { type: 'string', enum: ['statement', 'result', 'agreed', 'day_end', 'other'] }, confidence: { type: 'number' }, why: { type: 'string' } }) } }),
   },
   lessons: {
-    instruction: 'دي فترة قديمة بين نقطتين بداية، وحسابي ليها طلع غلط. لاقي الرسائل اللي غالبًا فهمتها غلط، وطلّع لحد ٣ دروس عامة تنفع بعد كده (من غير أسماء أو مبالغ). مش متأكد؟ رجّع قائمة فاضية.',
+    instruction: 'هذه فترة سابقة بين نقطتي بداية، وجاء حسابي لها خاطئًا. حدّد الرسائل التي أسأتُ فهمها على الأرجح، واستخرج حتى ٣ دروس عامة تفيد لاحقًا (دون أسماء أو مبالغ). إن لم تكن متأكدًا فأرجع قائمة فارغة.',
     maxTokens: 4096,
     schema: obj({ lessons: { type: 'array', items: { type: 'string' } }, confidence: { type: 'number' } }),
   },
   merge: {
-    instruction: 'ادمج الخلاصة الحالية والتصحيحات الجديدة في قائمة قواعد قصيرة مرقمة بالعامية. ما تضيعش أي درس، وشيل المكرر.',
+    instruction: 'ادمج الخلاصة الحالية والتصحيحات الجديدة في قائمة قواعد قصيرة مرقمة بالعربية الفصحى، دون إسقاط أي درس، مع حذف المكرر.',
     maxTokens: 8000,
     schema: obj({ summary: { type: 'string' } }),
   },
@@ -89,7 +89,7 @@ export function validate(body) {
 /** The system prompt: fixed rules, then the owner's training. The last block carries the cache breakpoint. */
 export function systemBlocks(training) {
   const blocks = [{ type: 'text', text: RULES }];
-  if (training.trim()) blocks.push({ type: 'text', text: 'تعليم صاحب المحل (له الأولوية على اللي فوق):\n' + training.trim() });
+  if (training.trim()) blocks.push({ type: 'text', text: 'تعليمات صاحب المحل (لها الأولوية على ما سبق):\n' + training.trim() });
   blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: { type: 'ephemeral' } };
   return blocks;
 }
@@ -125,14 +125,14 @@ export async function runTask(client, body, opts) {
   try {
     msg = req.betas ? await client.beta.messages.create(req) : await client.messages.create(req);
   } catch (e) {
-    if (e instanceof Anthropic.RateLimitError) throw new AiError('ضغط على Claude، استنى شوية', 429);
-    if (e instanceof Anthropic.AuthenticationError) throw new AiError('مفتاح Claude غلط (ANTHROPIC_API_KEY)', 500);
-    if (e instanceof Anthropic.APIConnectionError) throw new AiError('مفيش اتصال بـ Claude', 503);
+    if (e instanceof Anthropic.RateLimitError) throw new AiError('ضغط على Claude، انتظر قليلًا', 429);
+    if (e instanceof Anthropic.AuthenticationError) throw new AiError('مفتاح Claude غير صحيح (ANTHROPIC_API_KEY)', 500);
+    if (e instanceof Anthropic.APIConnectionError) throw new AiError('لا يوجد اتصال بـ Claude', 503);
     if (e instanceof Anthropic.APIError) throw new AiError(e.message, e.status || 502);
     throw e;
   }
-  if (msg.stop_reason === 'refusal') throw new AiError('Claude رفض يحلل دي، راجعها بنفسك', 422);
-  if (msg.stop_reason === 'max_tokens') throw new AiError('الرد اتقطع، قلّل حجم الدفعة', 502);
+  if (msg.stop_reason === 'refusal') throw new AiError('رفض Claude تحليل هذه الرسالة، فراجعها بنفسك', 422);
+  if (msg.stop_reason === 'max_tokens') throw new AiError('انقطع الرد، فقلّل حجم الدفعة', 502);
   const text = msg.content.filter(b => b.type === 'text').map(b => b.text).join('');
   return { data: JSON.parse(text), model: msg.model, usage: msg.usage, cost: costOf(msg.model, msg.usage) };
 }
@@ -140,5 +140,5 @@ export async function runTask(client, body, opts) {
 /** Same task as one plain prompt (for the offline Ollama engine). */
 export function plainPrompt({ task, training, input }) {
   const T = TASKS[task];
-  return `${RULES}\n${training.trim() ? '\nتعليم صاحب المحل:\n' + training.trim() + '\n' : ''}\n${T.instruction}\n\n${input}`;
+  return `${RULES}\n${training.trim() ? '\nتعليمات صاحب المحل:\n' + training.trim() + '\n' : ''}\n${T.instruction}\n\n${input}`;
 }

@@ -84,7 +84,7 @@ test('closings: understands the chat by meaning (no keyword), old "checkpoints" 
   const { client, calls } = fakeClient({ closings: [{ i: 23, balance: 1857125, kind: 'statement', confidence: 0.95, why: 'آلة حاسبة بتجمع اليوم' }] });
   const out = await runTask(client, { task: 'closings', input: '#23 | 4:01 | المحل (مختار) | [صورة: آلة حاسبة …]' });
   assert.equal(out.data.closings[0].balance, 1857125);
-  assert.match(calls[0].body.messages[0].content[0].text, /مش بكلمات معينة/);
+  assert.match(calls[0].body.messages[0].content[0].text, /لا بالبحث عن كلمات بعينها/);
   assert.deepEqual(calls[0].body.output_config.format.schema, TASKS.closings.schema);
   assert.throws(() => validate({ task: 'checkpoints', input: 'x' }), /bad task/);
 });

@@ -7,7 +7,7 @@ import { sameKey, json, deny } from '../../lib/http.js';
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   const password = Netlify.env.get('APP_PASSWORD'), apiKey = Netlify.env.get('ANTHROPIC_API_KEY');
-  if (!password || !apiKey) return json({ error: 'السيرفر ناقصه APP_PASSWORD أو ANTHROPIC_API_KEY' }, 500);
+  if (!password || !apiKey) return json({ error: 'ينقص الخادمَ APP_PASSWORD أو ANTHROPIC_API_KEY' }, 500);
   if (!sameKey(req.headers.get('x-app-key'), password)) return deny();
 
   const raw = await req.text();

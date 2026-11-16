@@ -30,7 +30,7 @@ class Unauthorized extends Error {}
 async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers: { 'content-type': 'application/json', 'x-app-key': key, ...(opts.headers || {}) } });
   if (res.status === 401) throw new Unauthorized();
-  let v; try { v = JSON.parse(await res.text()); } catch { throw new Error('رد غير مفهوم من السيرفر'); }
+  let v; try { v = JSON.parse(await res.text()); } catch { throw new Error('رد غير مفهوم من الخادم'); }
   if (!res.ok || v.error) { const e = new Error(v.error || 'خطأ ' + res.status); e.code = v.code || res.status; throw e; }
   return v;
 }
@@ -42,7 +42,7 @@ async function ai(task, input, { image = null, tier = 'fast', training = trainin
       spent += v.cost || 0;
       return v.data;
     } catch (e) {
-      if (e instanceof Unauthorized) { stopped = true; showLogin('الباسورد اتغير، ادخل تاني.'); throw e; }
+      if (e instanceof Unauthorized) { stopped = true; showLogin('تغيّرت كلمة المرور، سجّل الدخول مجددًا.'); throw e; }
       if (t > 0 || e.code === 400 || e.code === 422) throw e;
       await sleep(e.code === 429 || e.code === 529 ? 8000 : 1500);
     }
@@ -56,7 +56,7 @@ function persist(kind) {
   lsSet('wd_' + kind, body);
   saving = saving.then(() => api('/api/store?k=' + kind, { method: 'PUT', body: JSON.stringify(body) }))
     .then(() => { $('#store').textContent = 'محفوظ أونلاين.'; })
-    .catch(() => { $('#store').textContent = 'محفوظ على الجهاز ده بس لحد ما النت يرجع.'; });
+    .catch(() => { $('#store').textContent = 'محفوظ على هذا الجهاز فقط حتى يعود الاتصال.'; });
 }
 async function loadStore() {
   const [a, b] = await Promise.all([api('/api/store?k=settings'), api('/api/store?k=examples')]);
@@ -71,7 +71,7 @@ function showLogin(msg) { show('#login'); $('#pwErr').textContent = msg || ''; s
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault(); key = $('#pw').value; show('#pwErr', false);
   try { await loadStore(); lsSet('wd_key', key); $('#pw').value = ''; show('#login', false); }
-  catch (x) { $('#pwErr').textContent = x instanceof Unauthorized ? 'الباسورد غلط.' : 'السيرفر مش متاح. اتأكد من النت.'; show('#pwErr'); }
+  catch (x) { $('#pwErr').textContent = x instanceof Unauthorized ? 'كلمة المرور خاطئة.' : 'الخادم غير متاح. تأكد من الاتصال بالإنترنت.'; show('#pwErr'); }
 });
 $('#logout').addEventListener('click', () => { try { localStorage.removeItem('wd_key'); } catch { /* ignore */ } key = ''; showLogin(); });
 
@@ -79,25 +79,25 @@ $('#logout').addEventListener('click', () => { try { localStorage.removeItem('wd
 $('#file').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   show('#err', false); media = new Map();
-  $('#fileLabel').textContent = 'بفتح ' + f.name + ' …';
+  $('#fileLabel').textContent = 'جارٍ فتح ' + f.name + ' …';
   try {
     let txt;
     if (/\.zip$/i.test(f.name) || /zip/.test(f.type)) {
-      if (!window.JSZip) throw new Error('مكتبة فك الضغط ما اتحملتش. جرّب تاني.');
+      if (!window.JSZip) throw new Error('لم تُحمَّل مكتبة فك الضغط. حاول مرة أخرى.');
       const zip = await window.JSZip.loadAsync(f);
       const ents = Object.values(zip.files).filter(z => !z.dir && !z.name.includes('__MACOSX'));
       const chat = ents.find(z => /(^|\/)_chat\.txt$/i.test(z.name)) || ents.find(z => /\.txt$/i.test(z.name));
-      if (!chat) throw new Error('مفيش ملف محادثة (.txt) جوه الملف.');
+      if (!chat) throw new Error('لا يوجد ملف محادثة (.txt) داخل الملف.');
       txt = await chat.async('string');
       for (const z of ents) { const b = z.name.split('/').pop(); if (MEDIA.test(b)) media.set(b.toLowerCase(), z); }
     } else txt = await f.text();
     msgs = parse(txt); imgCache.clear();
-    if (!msgs.length) throw new Error('ده مش ملف تصدير واتساب.');
+    if (!msgs.length) throw new Error('هذا ليس ملف تصدير من واتساب.');
     chatName = f.name.replace(/\.(zip|txt)$/i, '').replace(/^WhatsApp Chat( with| -)?\s*/i, '');
     $('#fileLabel').textContent = `${f.name} · ${msgs.length} رسالة · ${[...media.keys()].filter(k => IMG.test(k)).length} صورة`;
     rows = []; show('#sum', false); show('#step3', false);
     setup();
-  } catch (x) { $('#err').textContent = x.message || 'تعذر قراءة الملف.'; show('#err'); $('#fileLabel').textContent = 'اختر ملف التصدير (.zip مع الوسائط)'; }
+  } catch (x) { $('#err').textContent = x.message || 'تعذّرت قراءة الملف.'; show('#err'); $('#fileLabel').textContent = 'اختر ملف التصدير (.zip مع الوسائط)'; }
 });
 
 /* ===== 1b. or: pictures + copied messages (paste, pick, drop, or forward to the phone and pick) ===== */
@@ -108,7 +108,7 @@ function addPics(files) {
   if (!imgs.length) return;
   inbox.push(...imgs);
   $('#thumbs').innerHTML = inbox.map(f => `<img src="${URL.createObjectURL(f)}" alt="">`).join('');
-  $('#picsLabel').textContent = `${inbox.length} صورة · زوّد أو الصق كمان`;
+  $('#picsLabel').textContent = `${inbox.length} صورة · أضف أو الصق المزيد`;
   refreshPicsButtons();
 }
 function refreshPicsButtons() { const any = inbox.length || $('#pasteText').value.trim(); show('#usePics', !!any); show('#clearPics', !!any); }
@@ -120,7 +120,7 @@ drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add(
 drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
 drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); addPics(e.dataTransfer.files); });
 $('#pasteText').addEventListener('input', refreshPicsButtons);
-$('#clearPics').addEventListener('click', () => { inbox = []; $('#thumbs').innerHTML = ''; $('#pasteText').value = ''; $('#picsLabel').textContent = 'صور ولقطات شاشة (اختار، أو الصق / اسحب هنا)'; refreshPicsButtons(); });
+$('#clearPics').addEventListener('click', () => { inbox = []; $('#thumbs').innerHTML = ''; $('#pasteText').value = ''; $('#picsLabel').textContent = 'صور ولقطات شاشة (اختر، أو الصق، أو اسحب هنا)'; refreshPicsButtons(); });
 /** Copied messages first (they carry names and times), then the pictures in the order added. */
 $('#usePics').addEventListener('click', () => {
   show('#err', false);
@@ -185,7 +185,7 @@ async function analyzeFrom(from, onStep) {
 async function understand(onStep) {
   let from = Math.max(0, msgs.length - WINDOW);
   for (;;) {
-    $('#progText').textContent = `بفهم آخر ${msgs.length - from} رسالة…`;
+    $('#progText').textContent = `جارٍ فهم آخر ${msgs.length - from} رسالة…`;
     await analyzeFrom(from, onStep);
     cps = await findClosings(from);
     const last = cps[cps.length - 1];
@@ -197,13 +197,13 @@ async function understand(onStep) {
 function showOpening() {
   const box = $('#openBox'); show('#openRow');
   if (!cp) {
-    box.innerHTML = `<p class="warnbox">ملقيتش قفلة حساب${analyzedFrom > 0 ? ` في آخر ${msgs.length - analyzedFrom} رسالة` : ''}: بحسب من ${analyzedFrom > 0 ? 'هناك' : 'أول المحادثة'}. اكتب الرصيد لو تعرفه.</p>`; return;
+    box.innerHTML = `<p class="warnbox">لم أجد إقفالًا للحساب${analyzedFrom > 0 ? ` في آخر ${msgs.length - analyzedFrom} رسالة` : ''}، لذا أحسب من ${analyzedFrom > 0 ? 'هناك' : 'أول المحادثة'}. اكتب الرصيد إن كنت تعرفه.</p>`; return;
   }
   const k = cps.indexOf(cp), m = msgs[cp.i];
   const opts = cps.map((x, j) => `<option value="${j}" ${j === k ? 'selected' : ''}>${esc(msgs[x.i].ts)} · ${fmt(x.amount)}</option>`).reverse().join('');
-  box.innerHTML = `<p class="note">بدأت من آخر قفلة · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote${cp.terms ? ' expr' : ''}"${cp.terms ? ' dir="ltr"' : ''}>${cp.terms ? expressionHtml(cp.terms, cp.stated) : esc(cpText(cp))}</div>
+  box.innerHTML = `<p class="note">بدأتُ من آخر إقفال للحساب · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote${cp.terms ? ' expr' : ''}"${cp.terms ? ' dir="ltr"' : ''}>${cp.terms ? expressionHtml(cp.terms, cp.stated) : esc(cpText(cp))}</div>
   <p class="note">${esc(cp.why)}</p>
-  ${cps.length > 1 ? `<label class="note" for="cpSel">مش دي؟</label><select id="cpSel">${opts}</select>` : ''}`;
+  ${cps.length > 1 ? `<label class="note" for="cpSel">ليس هذا؟ اختر غيره:</label><select id="cpSel">${opts}</select>` : ''}`;
 }
 const cpText = c => (c.terms ? expression(c.terms) + '\n=' + fmt(c.stated) : strip(msgs[c.i].text) || '[صورة]');
 
@@ -235,7 +235,7 @@ async function shrink(blob) {                       // max 1600 px JPEG: smaller
   } catch { return blob; }
 }
 const toB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
-const fail = (r, e) => { r.state = 'error'; r.kind = 'ignore'; r.flag = true; r.why = 'خطأ' + (e?.message ? ': ' + e.message : '') + '. اضغط «أعد».'; r.ai = { kind: 'ignore', amount: null }; };
+const fail = (r, e) => { r.state = 'error'; r.kind = 'ignore'; r.flag = true; r.why = 'خطأ' + (e?.message ? ': ' + e.message : '') + '. اضغط «أعِد».'; r.ai = { kind: 'ignore', amount: null }; };
 
 async function loadBlob(r) {
   if (!r.blob) { const b = await media.get(r.file.toLowerCase()).async('blob'); r.blob = new Blob([b], { type: mime(r.file) }); r.url = URL.createObjectURL(r.blob); }
@@ -278,7 +278,7 @@ async function doText(batch, list, training) {
       if (it.dup_of != null && r.kind !== 'ignore') { r.why += ` (مكررة مع #${it.dup_of})`; r.kind = 'ignore'; r.ai.kind = 'ignore'; }
       by.delete(r.i);
     }
-    for (const r of by.values()) { r.state = 'done'; r.flag = true; r.why = 'مفيش رد للرسالة دي، راجعها.'; }
+    for (const r of by.values()) { r.state = 'done'; r.flag = true; r.why = 'لم يصل رد لهذه الرسالة، فراجعها.'; }
   } catch (e) { batch.forEach(r => fail(r, e)); }
 }
 /** Images first (several at once), then the text in batches (they see the image results to avoid double counting). */
@@ -294,7 +294,7 @@ async function runAnalysis(list, onStep = () => {}) {
 }
 $('#go').addEventListener('click', async () => {
   if (busy) return;
-  if (!shop.size) { $('#aiNote').textContent = 'اختار اسم المحل الأول.'; show('#aiNote'); return; }
+  if (!shop.size) { $('#aiNote').textContent = 'اختر اسم المحل أولًا.'; show('#aiNote'); return; }
   show('#aiNote', false); busy = true; stopped = false; spent = 0; $('#go').disabled = true;
   allRows = msgs.map(m => prep(m, { shop, has })); analyzedFrom = msgs.length; cps = []; cp = null; rows = [];
   show('#sum'); show('#step3');
@@ -303,7 +303,7 @@ $('#go').addEventListener('click', async () => {
   const from = await understand(step);
   if (!stopped) await useStart(cps.length - 1);
   $('#prog').style.width = '100%';
-  $('#progText').textContent = stopped ? 'اتوقف. ادخل الباسورد واضغط «حلّل».' : `خلص · قريت ${msgs.length - Math.min(from, analyzedFrom)} رسالة · ≈ $${spent.toFixed(3)}`;
+  $('#progText').textContent = stopped ? 'توقّف التحليل. سجّل الدخول واضغط «حلّل».' : `انتهى · قرأتُ ${msgs.length - Math.min(from, analyzedFrom)} رسالة · ≈ $${spent.toFixed(3)}`;
   busy = false; $('#go').disabled = false; render();
   if (!stopped) learnFromHistory();
 });
@@ -330,7 +330,7 @@ async function learnFromHistory() {
       await runAnalysis(g.list);
       const calcd = totals(g.list, signed(g.a)).debt, actual = signed(g.b);
       if (Math.abs(actual - calcd) >= 1) {
-        const detail = g.list.filter(x => !x.sys).map(x => `#${x.i} | ${x.side === 'shop' ? 'المحل' : 'العميل'} | ${x.img ? '[صورة: ' + (x.summary || '') + ']' : (x.text || '').replace(/\n/g, ' ').slice(0, 200)} | فهمتها: ${KIND[x.kind]} ${x.amount ?? ''} | ${x.why}`).join('\n');
+        const detail = g.list.filter(x => !x.sys).map(x => `#${x.i} | ${x.side === 'shop' ? 'المحل' : 'العميل'} | ${x.img ? '[صورة: ' + (x.summary || '') + ']' : (x.text || '').replace(/\n/g, ' ').slice(0, 200)} | فهمتُها: ${KIND[x.kind]} ${x.amount ?? ''} | ${x.why}`).join('\n');
         const input = `البداية (#${g.a.i}): "${strip(msgs[g.a.i].text).slice(0, 200)}" = ${signed(g.a)}\nالبداية التالية (#${g.b.i}): "${strip(msgs[g.b.i].text).slice(0, 200)}" = ${actual}\nحسابي: ${calcd} (الفرق ${actual - calcd})\n${detail}`;
         try {
           const v = await ai('lessons', input, { tier: 'strong' });
@@ -351,10 +351,10 @@ let merging = false;
 async function mergeOld() {
   const act = examples.filter(e => !e.merged);
   if (merging || act.length <= KEEP) return;
-  merging = true; $('#exN').textContent = 'بدمج التصحيحات القديمة…';
+  merging = true; $('#exN').textContent = 'جارٍ دمج التصحيحات القديمة…';
   const old = act.slice(0, act.length - KEEP);
   try {
-    const v = await ai('merge', `الخلاصة الحالية:\n${settings.learned || '(فاضية)'}\n\nتصحيحات جديدة:\n${old.map(exampleLine).join('\n')}`, { tier: 'strong', training: '' });
+    const v = await ai('merge', `الخلاصة الحالية:\n${settings.learned || '(فارغة)'}\n\nتصحيحات جديدة:\n${old.map(exampleLine).join('\n')}`, { tier: 'strong', training: '' });
     const sum = String(v?.summary || '').trim();
     if (sum) { settings.learned = sum; old.forEach(e => { e.merged = true; }); persist('settings'); persist('examples'); }
   } catch { /* next time */ }
@@ -373,13 +373,13 @@ function finalCalc() {
 function renderCheck(rec) {
   if (!rec) return '';
   const ok = rec.items.filter(x => x.status === 'ok').length, miss = rec.items.filter(x => x.status === 'missing');
-  const out = [`الكشف: ${ok} من ${rec.items.length} بند لاقيتهم في المحادثة ✓`];
-  out.push(`لاقيتها في المحادثة: ${rec.items.filter(x => x.status === 'ok').map(x => fmt(x.amount)).join('، ') || '—'}`);
-  if (rec.before.length) out.push(`منقولة من الآلة الحاسبة، قبل بداية المحادثة (مش غلط): ${rec.before.map(fmt).join('، ')}`);
-  if (miss.length) out.push(`⚠️ في الكشف ومش في المحادثة: ${miss.map(x => fmt(x.amount)).join('، ')}`);
-  if (rec.extra.length) out.push(`⚠️ في المحادثة ومش في الكشف: ${rec.extra.map(x => fmt(x.amount)).join('، ')}`);
-  if (!rec.arithmeticOk) out.push('⚠️ جمع الكشف نفسه غلط');
-  out.push(rec.matches ? `✓ الناتج ${fmt(rec.stated)} مظبوط` : `⚠️ حسابي ${fmt(rec.eq.total)} والكشف ${fmt(rec.stated)} (فرق ${fmt(rec.eq.total - rec.stated)})`);
+  const out = [`الكشف: وجدتُ ${ok} من ${rec.items.length} بندًا في المحادثة ✓`];
+  out.push(`وُجدت في المحادثة: ${rec.items.filter(x => x.status === 'ok').map(x => fmt(x.amount)).join('، ') || '—'}`);
+  if (rec.before.length) out.push(`منقولة من الآلة الحاسبة، وهي قبل بداية المحادثة (ليست خطأ): ${rec.before.map(fmt).join('، ')}`);
+  if (miss.length) out.push(`⚠️ في الكشف وليست في المحادثة: ${miss.map(x => fmt(x.amount)).join('، ')}`);
+  if (rec.extra.length) out.push(`⚠️ في المحادثة وليست في الكشف: ${rec.extra.map(x => fmt(x.amount)).join('، ')}`);
+  if (!rec.arithmeticOk) out.push('⚠️ جمع الكشف نفسه خاطئ');
+  out.push(rec.matches ? `✓ الناتج ${fmt(rec.stated)} صحيح` : `⚠️ حسابي ${fmt(rec.eq.total)} والكشف ${fmt(rec.stated)} (الفرق ${fmt(rec.eq.total - rec.stated)})`);
   return out.join('\n');
 }
 function render() {
@@ -387,7 +387,7 @@ function render() {
   $('#eq').innerHTML = expressionHtml(fc.eq.terms, fc.eq.total); $('#eqTotal').textContent = fmt(fc.eq.total);
   $('#check').textContent = renderCheck(fc.rec); show('#check', !!fc.rec);
   const tag = new Map();
-  if (fc.rec) { for (const it of fc.rec.items) for (const i of it.found || []) tag.set(i, '✓ في الكشف'); for (const x of fc.rec.extra) tag.set(x.i, '⚠️ مش في الكشف'); }
+  if (fc.rec) { for (const it of fc.rec.items) for (const i of it.found || []) tag.set(i, '✓ في الكشف'); for (const x of fc.rec.extra) tag.set(x.i, '⚠️ ليست في الكشف'); }
   for (const r of rows) r.tag = tag.get(r.i) || (r.partOf != null ? `ضمن #${r.partOf}` : '');
   $('#debt').textContent = fmt(Math.abs(c.debt)) + ' ج.م';
   $('#debtLabel').textContent = c.debt >= 0 ? 'على العميل' : 'للعميل عندنا';
@@ -395,21 +395,21 @@ function render() {
   $('#revN').textContent = c.rev || '';
   const needs = r => (r.flag && !r.ok) || r.state === 'error';
   const vis = rows.filter(r => !r.sys && !r.start && (filter === 'all' || (filter === 'review' ? needs(r) : r.kind !== 'ignore' || needs(r) || r.dirty || r.state !== 'done')));
-  $('#list').innerHTML = vis.length ? vis.map(r => card(r, c.bal.get(r.i))).join('') : `<p class="note">${filter === 'review' ? 'مفيش حاجة للمراجعة.' : 'مفيش معاملات لسه.'}</p>`;
+  $('#list').innerHTML = vis.length ? vis.map(r => card(r, c.bal.get(r.i))).join('') : `<p class="note">${filter === 'review' ? 'لا شيء يحتاج إلى مراجعة.' : 'لا توجد معاملات بعد.'}</p>`;
 }
 function card(r, bal) {
   const pend = r.state === 'pending';
   const seg = ['sent', 'received', 'ignore'].map(k => `<button data-k="${k}" aria-pressed="${r.kind === k}" ${pend ? 'disabled' : ''}>${KIND[k]}</button>`).join('');
-  const meta = !pend && r.state === 'done' ? `<em>· ${Math.round(r.conf * 100)}%${r.esc ? ' · نموذج أقوى' : ''}${r.app ? ' · ' + esc(r.app) : ''}${r.learned ? ' · اتحفظ' : ''}</em>` : '';
+  const meta = !pend && r.state === 'done' ? `<em>· ${Math.round(r.conf * 100)}%${r.esc ? ' · بنموذج أقوى' : ''}${r.app ? ' · ' + esc(r.app) : ''}${r.learned ? ' · حُفظ' : ''}</em>` : '';
   return `<article class="row ${r.flag && !r.ok ? 'flag' : ''}" data-i="${r.i}">
 <header><span class="who ${r.side}">${r.side === 'shop' ? 'المحل' : 'العميل'} · ${esc(r.sender)}</span><time>${esc(r.ts)}</time></header>
 ${r.url ? `<button class="thumb" data-act="zoom" aria-label="كبّر"><img src="${r.url}" alt="صورة"></button>` : r.img ? '<p class="note">صورة…</p>' : ''}
 ${r.text ? `<p class="msg">${esc(r.text)}</p>` : ''}
-<div class="ai">${pend ? 'بحلل…' : esc(r.why) || '—'} ${meta}</div>
+<div class="ai">${pend ? 'جارٍ التحليل…' : esc(r.why) || '—'} ${meta}</div>
 <div class="ctl"><div class="seg">${seg}</div><input class="amt" inputmode="decimal" value="${r.amount ?? ''}" placeholder="المبلغ" aria-label="المبلغ" ${pend ? 'disabled' : ''}></div>
-${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}${r.state === 'done' && r.i > openIdx && r.partOf == null ? `<div class="bal">بعدها: ${fmt(Math.abs(bal ?? 0))} ${(bal ?? 0) >= 0 ? 'على العميل' : 'للعميل'}</div>` : ''}
-${r.dirty ? '<div class="fix"><input class="why" placeholder="ليه؟ (اختياري)"><button data-act="learn">احفظ التصحيح</button></div>' : ''}
-<div class="acts">${r.flag && !r.ok && !r.dirty && !pend ? '<button class="ghost" data-act="ok">صح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعد</button>' : ''}</div>
+${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}${r.state === 'done' && r.i > openIdx && r.partOf == null ? `<div class="bal">الرصيد بعدها: ${fmt(Math.abs(bal ?? 0))} ${(bal ?? 0) >= 0 ? 'على العميل' : 'للعميل'}</div>` : ''}
+${r.dirty ? '<div class="fix"><input class="why" placeholder="السبب (اختياري)"><button data-act="learn">احفظ التصحيح</button></div>' : ''}
+<div class="acts">${r.flag && !r.ok && !r.dirty && !pend ? '<button class="ghost" data-act="ok">صح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعِد</button>' : ''}</div>
 </article>`;
 }
 const rowOf = el => { const a = el.closest('[data-i]'); return a && rows.find(r => r.i === Number(a.dataset.i)); };
@@ -443,7 +443,7 @@ $('#filters').addEventListener('click', e => {
 $('#zoom').addEventListener('click', () => { $('#zoom').style.display = 'none'; });
 $('#copy').addEventListener('click', async () => {
   const fc = finalCalc();
-  try { await navigator.clipboard.writeText(fc.eq.text); $('#copy').textContent = 'اتنسخ ✓'; } catch { $('#copy').textContent = 'النسخ مش متاح'; }
+  try { await navigator.clipboard.writeText(fc.eq.text); $('#copy').textContent = 'تم النسخ ✓'; } catch { $('#copy').textContent = 'النسخ غير متاح'; }
   setTimeout(() => { $('#copy').textContent = 'انسخ الحساب'; }, 2000);
 });
 
@@ -451,7 +451,7 @@ $('#copy').addEventListener('click', async () => {
 function renderRules() {
   $('#rules').innerHTML = settings.rules.map((x, k) => `<li><span>${esc(x)}</span><button class="ghost" data-del="${k}" aria-label="احذف">حذف</button></li>`).join('');
   const act = examples.filter(e => !e.merged).length;
-  $('#exN').textContent = [examples.length ? `${examples.length} تصحيح (${examples.length - act} في الخلاصة)` : 'مفيش تصحيحات لسه', settings.selfChecked ? `راجعت ${settings.selfChecked} فترة لوحدي` : ''].filter(Boolean).join(' · ');
+  $('#exN').textContent = [examples.length ? `${examples.length} تصحيحًا (${examples.length - act} منها في الخلاصة)` : 'لا توجد تصحيحات بعد', settings.selfChecked ? `راجعتُ ${settings.selfChecked} فترة تلقائيًا` : ''].filter(Boolean).join(' · ');
   $('#learned').value = settings.learned; show('#learnedBox', !!settings.learned);
   $('#kw').value = settings.keywords.join('، ');
 }
@@ -467,4 +467,4 @@ $('#kw').addEventListener('change', () => {
 renderRules();
 key = lsGet('wd_key') || '';
 if (!key) showLogin();
-else loadStore().catch(e => { if (e instanceof Unauthorized) showLogin('الباسورد اتغير، ادخل تاني.'); else $('#store').textContent = 'السيرفر مش متاح دلوقتي.'; });
+else loadStore().catch(e => { if (e instanceof Unauthorized) showLogin('تغيّرت كلمة المرور، سجّل الدخول مجددًا.'); else $('#store').textContent = 'الخادم غير متاح الآن.'; });

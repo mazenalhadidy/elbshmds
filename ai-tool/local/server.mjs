@@ -45,7 +45,7 @@ async function ollama(body) {
     body: JSON.stringify({ model, stream: true, format: TASKS[t.task].schema, options: { temperature: 0, num_ctx: 16384 },
       messages: [{ role: 'user', content: plainPrompt(t), ...(t.image ? { images: [t.image] } : {}) }] }),
   });
-  if (!r.ok) throw new AiError('Ollama: ' + (await r.text()).slice(0, 200) + ' — هل Ollama شغال والموديل متنزل؟');
+  if (!r.ok) throw new AiError('Ollama: ' + (await r.text()).slice(0, 200) + ' — هل Ollama يعمل والنموذج مثبت؟');
   let text = '', buf = '';
   const dec = new TextDecoder();
   for await (const chunk of r.body) {
@@ -68,11 +68,11 @@ const server = http.createServer(async (req, res) => {
         const body = JSON.parse(await readBody(req, 5_000_000));
         try {
           if (ENGINE === 'ollama') return send(res, 200, await ollama(body));
-          if (!claude) throw new AiError('حط anthropicApiKey في local/config.json', 500);
+          if (!claude) throw new AiError('ضع anthropicApiKey في local/config.json', 500);
           return send(res, 200, await runTask(claude, body, { models: { fast: models.fast || 'claude-haiku-5-5', strong: models.strong || 'claude-sonnet-5-5' } }));
         } catch (e) {
           const offline = /fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN/.test(String(e?.cause?.code || e?.message));
-          return send(res, e.status === 400 ? 400 : 502, { error: offline && ENGINE === 'ollama' ? 'Ollama مش شغال على الجهاز.' : String(e.message || e), code: e.status });
+          return send(res, e.status === 400 ? 400 : 502, { error: offline && ENGINE === 'ollama' ? 'Ollama لا يعمل على هذا الجهاز.' : String(e.message || e), code: e.status });
         }
       }
       if (url.pathname === '/api/store') {
@@ -100,8 +100,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   const lan = Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal).map(i => i.address);
-  console.log(`\n  مدقق الديون شغال (${ENGINE})\n  الكمبيوتر:  http://localhost:${PORT}`);
-  for (const ip of lan) console.log(`  الموبايل (نفس الواي فاي):  http://${ip}:${PORT}`);
+  console.log(`\n  مدقق الديون يعمل (${ENGINE})\n  الحاسوب:  http://localhost:${PORT}`);
+  for (const ip of lan) console.log(`  الهاتف (على شبكة الواي فاي نفسها):  http://${ip}:${PORT}`);
   if (!cfg.password || cfg.password === 'change-me') console.log('\n  ⚠ غيّر password في local/config.json');
-  console.log('\n  اقفل الشباك ده عشان توقف الأداة.\n');
+  console.log('\n  أغلق هذه النافذة لإيقاف الأداة.\n');
 });

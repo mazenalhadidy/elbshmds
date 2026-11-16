@@ -5,7 +5,7 @@ import { sameKey, json, deny, STORE_KEYS, STORE_MAX } from '../../lib/http.js';
 
 export default async (req) => {
   const password = Netlify.env.get('APP_PASSWORD');
-  if (!password) return json({ error: 'السيرفر ناقصه APP_PASSWORD' }, 500);
+  if (!password) return json({ error: 'ينقص الخادمَ APP_PASSWORD' }, 500);
   if (!sameKey(req.headers.get('x-app-key'), password)) return deny();
   const k = new URL(req.url).searchParams.get('k');
   if (!STORE_KEYS.has(k)) return json({ error: 'bad key' }, 400);
