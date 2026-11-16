@@ -85,3 +85,9 @@ test('a typed statement in the chat becomes the starting point', () => {
   const cps = mergeCheckpoints([{ i: 0, amount: 1, dir: 'client_owes' }], statementCheckpoints(msgs));
   assert.equal(cps.length, 1); assert.equal(cps[0].stated, 1857125); assert.equal(cps[0].terms.length, 22);
 });
+
+test('on screen a number is never cut: one piece per number, sign included', async () => {
+  const { expressionHtml } = await import('../public/core.js');
+  const html = expressionHtml([1171035, 22150, -311000], 882185);
+  assert.equal(html, '<span class="t">1,171,035</span><wbr><span class="t">+22,150</span><wbr><span class="t">−311,000</span><br><span class="t">=882,185</span>');
+});

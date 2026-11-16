@@ -4,7 +4,7 @@
 import {
   esc, fmt, num, clamp, KIND, IMG, MEDIA, parse, strip, prep, applyAnswer, weak,
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
-  linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression,
+  linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression, expressionHtml,
 } from './core.js';
 
 const $ = s => document.querySelector(s);
@@ -201,7 +201,7 @@ function showOpening() {
   }
   const k = cps.indexOf(cp), m = msgs[cp.i];
   const opts = cps.map((x, j) => `<option value="${j}" ${j === k ? 'selected' : ''}>${esc(msgs[x.i].ts)} · ${fmt(x.amount)}</option>`).reverse().join('');
-  box.innerHTML = `<p class="note">بدأت من آخر قفلة · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote">${esc(cpText(cp))}</div>
+  box.innerHTML = `<p class="note">بدأت من آخر قفلة · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote${cp.terms ? ' expr' : ''}"${cp.terms ? ' dir="ltr"' : ''}>${cp.terms ? expressionHtml(cp.terms, cp.stated) : esc(cpText(cp))}</div>
   <p class="note">${esc(cp.why)}</p>
   ${cps.length > 1 ? `<label class="note" for="cpSel">مش دي؟</label><select id="cpSel">${opts}</select>` : ''}`;
 }
@@ -384,7 +384,7 @@ function renderCheck(rec) {
 }
 function render() {
   const c = totals(rows, openVal(), openIdx), fc = finalCalc();
-  $('#eq').textContent = fc.eq.text; $('#eqTotal').textContent = fmt(fc.eq.total);
+  $('#eq').innerHTML = expressionHtml(fc.eq.terms, fc.eq.total); $('#eqTotal').textContent = fmt(fc.eq.total);
   $('#check').textContent = renderCheck(fc.rec); show('#check', !!fc.rec);
   const tag = new Map();
   if (fc.rec) { for (const it of fc.rec.items) for (const i of it.found || []) tag.set(i, '✓ في الكشف'); for (const x of fc.rec.extra) tag.set(x.i, '⚠️ مش في الكشف'); }

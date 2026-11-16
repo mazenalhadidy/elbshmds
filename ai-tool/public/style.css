@@ -72,14 +72,19 @@ ol{margin:6px 0;padding-inline-start:22px}
 @media(prefers-reduced-motion:reduce){.bar i{transition:none}}
 .rules{list-style:none;padding:0;margin:10px 0 0}
 .calc{background:#000;color:#fff;border-radius:12px;padding:12px 14px;margin-top:12px;text-align:right}
-.calc pre{margin:0;font:18px/1.5 system-ui,sans-serif;white-space:pre-wrap;word-break:break-all;font-variant-numeric:tabular-nums}
+.calc pre{margin:0;font:18px/1.5 system-ui,sans-serif;white-space:normal;font-variant-numeric:tabular-nums}
 .calc-total{color:#5eead4;font-size:clamp(30px,9vw,44px);font-weight:600;font-variant-numeric:tabular-nums}
 .check{white-space:pre-wrap;font:inherit;font-size:14px;background:var(--bg);border-radius:10px;padding:8px 10px;margin:8px 0 0}
 /* calculator lines have no spaces: let them wrap anywhere instead of widening the page */
-.quote,.ai,.check,.msg,.bal{overflow-wrap:anywhere}
-.quote{direction:ltr;text-align:right}
+.quote,.ai,.check,.msg,.bal{overflow-wrap:break-word}
 .or{text-align:center;color:var(--mute);margin:8px 0}
 #pasteText{margin-top:8px;min-height:70px}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-top:8px}
 .thumbs img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
 label.file.drag{background:var(--v);color:#fff}
+/* one number = one unbreakable piece (with its sign); lines break only between pieces */
+.t{white-space:nowrap}
+.quote.expr{white-space:normal;font-variant-numeric:tabular-nums}
+/* the sign always stays in front of its number, also inside Arabic (right-to-left) text */
+.t{direction:ltr;unicode-bidi:isolate}
+.quote.expr{direction:ltr;text-align:right}

@@ -272,3 +272,11 @@ export function reconcile(st, txs, { midway = true } = {}) {
   const sumTerms = st.terms.reduce((a, v) => a + v, 0);
   return { items, extra, before, eq, stated: st.total, arithmeticOk: same(sumTerms, st.total), matches: same(eq.total, st.total) };
 }
+
+/** The calculation for the screen: every number is one piece with its sign (+1,234 / −5,000 / =9,999).
+ *  A line may break only BETWEEN pieces, so a number is never cut and its sign starts the new line. */
+export function expressionHtml(terms, total) {
+  const piece = t => `<span class="t">${t}</span>`;
+  const parts = terms.map((v, k) => piece((k === 0 ? (v < 0 ? '-' : '') : v < 0 ? '−' : '+') + fmt(Math.abs(v))));
+  return parts.join('<wbr>') + (total == null ? '' : '<br>' + piece('=' + fmt(total)));
+}
