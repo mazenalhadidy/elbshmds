@@ -374,7 +374,8 @@ function renderCheck(rec) {
   if (!rec) return '';
   const ok = rec.items.filter(x => x.status === 'ok').length, miss = rec.items.filter(x => x.status === 'missing');
   const out = [`الكشف: ${ok} من ${rec.items.length} بند لاقيتهم في المحادثة ✓`];
-  if (rec.before.length) out.push(`${rec.before.length} بند قبل بداية المحادثة (مش غلط)`);
+  out.push(`لاقيتها في المحادثة: ${rec.items.filter(x => x.status === 'ok').map(x => fmt(x.amount)).join('، ') || '—'}`);
+  if (rec.before.length) out.push(`منقولة من الآلة الحاسبة، قبل بداية المحادثة (مش غلط): ${rec.before.map(fmt).join('، ')}`);
   if (miss.length) out.push(`⚠️ في الكشف ومش في المحادثة: ${miss.map(x => fmt(x.amount)).join('، ')}`);
   if (rec.extra.length) out.push(`⚠️ في المحادثة ومش في الكشف: ${rec.extra.map(x => fmt(x.amount)).join('، ')}`);
   if (!rec.arithmeticOk) out.push('⚠️ جمع الكشف نفسه غلط');
