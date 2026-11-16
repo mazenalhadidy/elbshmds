@@ -5,6 +5,7 @@ import {
   esc, fmt, num, clamp, KIND, IMG, MEDIA, parse, strip, prep, applyAnswer, weak,
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
   linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression, expressionHtml,
+  parseStatement, findTextMarker, dhash, hamming, SAME_PICTURE, isTransaction,
 } from './core.js';
 
 const $ = s => document.querySelector(s);
@@ -201,11 +202,89 @@ function showOpening() {
   }
   const k = cps.indexOf(cp), m = msgs[cp.i];
   const opts = cps.map((x, j) => `<option value="${j}" ${j === k ? 'selected' : ''}>${esc(msgs[x.i].ts)} · ${fmt(x.amount)}</option>`).reverse().join('');
-  box.innerHTML = `<p class="note">بدأتُ من آخر إقفال للحساب · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote${cp.terms ? ' expr' : ''}"${cp.terms ? ' dir="ltr"' : ''}>${cp.terms ? expressionHtml(cp.terms, cp.stated) : esc(cpText(cp))}</div>
+  box.innerHTML = `<p class="note">${cp.chosen ? 'البداية التي حددتَها' : 'بدأتُ من آخر إقفال للحساب'} · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote${cp.terms ? ' expr' : ''}"${cp.terms ? ' dir="ltr"' : ''}>${cp.terms ? expressionHtml(cp.terms, cp.stated) : esc(cpText(cp))}</div>
   <p class="note">${esc(cp.why)}</p>
   ${cps.length > 1 ? `<label class="note" for="cpSel">ليس هذا؟ اختر غيره:</label><select id="cpSel">${opts}</select>` : ''}`;
 }
 const cpText = c => (c.terms ? expression(c.terms) + '\n=' + fmt(c.stated) : strip(msgs[c.i].text) || '[صورة]');
+
+/* ===== "our start is this": a message text or a picture, found from the end of the chat backwards ===== */
+const marker = { text: '', hash: null };
+async function fingerprint(blob) {
+  const bmp = await createImageBitmap(blob);
+  const c = document.createElement('canvas'); c.width = 9; c.height = 8;
+  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, 9, 8);
+  const d = g.getImageData(0, 0, 9, 8).data, grey = [];
+  for (let k = 0; k < d.length; k += 4) grey.push(0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]);
+  return dhash(grey);
+}
+function refreshMarker() {
+  marker.text = $('#markText').value.trim();
+  show('#markClear', !!(marker.text || marker.hash));
+}
+$('#markText').addEventListener('input', refreshMarker);
+$('#markPic').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { marker.hash = await fingerprint(f); $('#markPreview').innerHTML = `<img src="${URL.createObjectURL(f)}" alt="صورة البداية">`; $('#markPicLabel').textContent = 'صورة البداية محددة · غيّرها'; }
+  catch { $('#markPicLabel').textContent = 'تعذّرت قراءة الصورة'; }
+  e.target.value = ''; refreshMarker();
+});
+$('#markClear').addEventListener('click', () => {
+  marker.hash = null; $('#markText').value = ''; $('#markPreview').innerHTML = ''; $('#markPicLabel').textContent = 'أو صورة البداية'; refreshMarker();
+});
+/** Index of the marked start, searching from the last message back (pictures are compared on this device: free). */
+async function locateMarker() {
+  if (marker.text) { const i = findTextMarker(msgs, marker.text); if (i >= 0) return i; }
+  if (marker.hash) {
+    for (let k = allRows.length - 1; k >= 0; k--) {
+      const r = allRows[k]; if (!r.img) continue;
+      try { await loadBlob(r); r.hash ||= await fingerprint(r.blob); } catch { continue; }
+      if (hamming(r.hash, marker.hash) <= SAME_PICTURE) return r.i;
+    }
+  }
+  return -1;
+}
+/** The closing a row itself shows: a calculator statement, its result, or a typed statement. */
+function closingOf(r) {
+  if (r.calc?.terms?.length >= 2) return statementCp(r.i, r.calc);
+  const typed = parseStatement(msgs[r.i].text); if (typed) return statementCp(r.i, typed);
+  if (r.calc) {
+    const st = allRows.slice(Math.max(0, r.i - 3), r.i).reverse().find(x => x.calc?.terms?.length >= 2 && Math.abs(x.calc.total - r.calc.total) < 1);
+    return st ? statementCp(st.i, st.calc) : { i: r.i, amount: Math.abs(r.calc.total), dir: r.calc.total < 0 ? 'shop_owes' : 'client_owes', conf: 1, why: 'ناتج آلة حاسبة' };
+  }
+  return null;
+}
+/**
+ * Start at message i (chosen by the user). If it closes the account (calculator, result, agreed balance) its balance
+ * opens the new account; if it is a transfer it is the first operation of the new account; otherwise the account
+ * starts right after it and you type the opening balance.
+ */
+async function startAt(i, onStep) {
+  await analyzeFrom(Math.max(0, i - 3), onStep);
+  const r = allRows[i];
+  let c = closingOf(r);
+  if (!c && !isTransaction(r)) c = (await findClosings(i)).find(x => x.i === i) || null;
+  if (c) {
+    cps = [c];
+    if (c.terms) {                                   // a statement: also check it against what came before
+      const back = Math.max(0, c.i - WINDOW); await analyzeFrom(back, onStep);
+      cps = mergeCheckpoints((await findClosings(back)).filter(x => x.i < c.i), [c]);
+    }
+    cp = cps.find(x => x.i === c.i); cp.chosen = true;
+    await useStart(cps.indexOf(cp));
+    return Math.min(i, analyzedFrom);
+  }
+  cp = null; cps = [];
+  $('#openAmt').value = 0; $('#openDir').value = '1';           // the old opening no longer applies: messages before here are skipped
+  openIdx = isTransaction(r) ? i - 1 : i; startIdx = openIdx;
+  rows = allRows.slice(startIdx + 1);
+  for (const x of allRows) delete x.start;
+  show('#openRow');
+  $('#openBox').innerHTML = `<p class="note">البداية التي حددتَها · ${esc(msgs[i].sender || '')} · ${esc(msgs[i].ts)}</p><div class="quote">${esc(strip(msgs[i].text) || '[صورة]')}</div>
+  <p class="warnbox">${isTransaction(r) ? 'هذه أول عملية في الحساب.' : 'يبدأ الحساب بعد هذه الرسالة.'} اكتب رصيد البداية إن وُجد.</p>`;
+  render();
+  return i;
+}
 
 /** Use closing k as the start: its balance opens the new account; a statement is also checked. */
 async function useStart(k) {
@@ -300,8 +379,14 @@ $('#go').addEventListener('click', async () => {
   show('#sum'); show('#step3');
   let done = 0;
   const step = () => { done++; $('#prog').style.width = Math.min(95, 100 * done / Math.max(1, allRows.filter(r => r.state === 'pending').length / 20 + done)) + '%'; renderSoon(); };
-  const from = await understand(step);
-  if (!stopped) await useStart(cps.length - 1);
+  let from = -1;
+  if (marker.text || marker.hash) {
+    $('#progText').textContent = 'أبحث عن رسالة البداية من آخر المحادثة…';
+    const at = await locateMarker();
+    if (at >= 0) from = await startAt(at, step);
+    else { $('#aiNote').textContent = 'لم أجد رسالة البداية التي حددتها، فبحثتُ عن آخر إقفال بنفسي.'; show('#aiNote'); }
+  }
+  if (from < 0) { from = await understand(step); if (!stopped) await useStart(cps.length - 1); }
   $('#prog').style.width = '100%';
   $('#progText').textContent = stopped ? 'توقّف التحليل. سجّل الدخول واضغط «حلّل».' : `انتهى · قرأتُ ${msgs.length - Math.min(from, analyzedFrom)} رسالة · ≈ $${spent.toFixed(3)}`;
   busy = false; $('#go').disabled = false; render();
@@ -409,7 +494,7 @@ ${r.text ? `<p class="msg">${esc(r.text)}</p>` : ''}
 <div class="ctl"><div class="seg">${seg}</div><input class="amt" inputmode="decimal" value="${r.amount ?? ''}" placeholder="المبلغ" aria-label="المبلغ" ${pend ? 'disabled' : ''}></div>
 ${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}${r.state === 'done' && r.i > openIdx && r.partOf == null ? `<div class="bal">الرصيد بعدها: ${fmt(Math.abs(bal ?? 0))} ${(bal ?? 0) >= 0 ? 'على العميل' : 'للعميل'}</div>` : ''}
 ${r.dirty ? '<div class="fix"><input class="why" placeholder="السبب (اختياري)"><button data-act="learn">احفظ التصحيح</button></div>' : ''}
-<div class="acts">${r.flag && !r.ok && !r.dirty && !pend ? '<button class="ghost" data-act="ok">صح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعِد</button>' : ''}</div>
+<div class="acts">${r.flag && !r.ok && !r.dirty && !pend ? '<button class="ghost" data-act="ok">صحيح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعِد</button>' : ''}${!pend && !busy ? '<button class="ghost start-btn" data-act="start">ابدأ من هنا</button>' : ''}</div>
 </article>`;
 }
 const rowOf = el => { const a = el.closest('[data-i]'); return a && rows.find(r => r.i === Number(a.dataset.i)); };
@@ -425,6 +510,7 @@ $('#list').addEventListener('click', async e => {
     examples.push({ at: Date.now(), side: r.side, content: r.img ? 'صورة: ' + (r.summary || 'إيصال') + (r.text ? ' | تعليق: ' + r.text.slice(0, 120) : '') : (r.text || '').slice(0, 200), ai: r.ai, fix: { kind: r.kind, amount: r.amount }, note });
     persist('examples'); r.dirty = false; r.ok = true; r.learned = true; renderRules(); render(); mergeOld();
   }
+  if (act === 'start' && !busy) { busy = true; await startAt(r.i); busy = false; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (act === 'retry' && !busy) {
     r.state = 'pending'; render();
     const training = trainingText(settings, examples);

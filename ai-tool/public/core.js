@@ -21,7 +21,9 @@ const EXT = 'jpe?g|png|webp|heic|gif|opus|ogg|mp3|m4a|aac|mp4|mov|3gp|pdf|vcf|we
 export const IMG = /\.(jpe?g|png|webp|heic|gif)$/i;
 export const MEDIA = new RegExp(`\\.(${EXT})$`, 'i');
 const VOICE = /\.(opus|ogg|mp3|m4a|aac)$/i;
-const DELETED = /This message was deleted|You deleted this message|تم حذف هذه الرسالة|لقد حذفت هذه الرسالة/;
+const DELETED = /This message was deleted|You deleted this message|تم حذف هذه الرسالة|لقد حذفت هذه الرسالة|هذه الرسالة محذوفة|حذف المشرف هذه الرسالة|was deleted by admin/;
+const EDITED = /\s*<(?:This message was edited|تم تعديل هذه الرسالة|تم تعديل الرسالة)>/gi;
+const STICKER = /^STK-|\.webp$/i;
 const SYSTEM = /end-to-end encrypted|created group|added |removed |left$|joined using|changed (the )?(group|subject|icon)|مشفره|مشفرة|أنشأ المجموعة|انشا المجموعه|أضاف|اضاف|غادر|انضم/i;
 const OMIT = /<Media omitted>|<تم استبعاد الوسائط>|image omitted|تم استبعاد الصورة|الوسائط غير مضمنة/i;
 
@@ -57,7 +59,7 @@ export function attachment(m, has) {
 /** Message text without the attachment markers. */
 export const strip = t => t.replace(new RegExp(`<[^<>]*\\.(?:${EXT})>`, 'gi'), '')
   .replace(new RegExp(`[\\w\\-.]+\\.(?:${EXT})\\s*\\((?:file attached|الملف مرفق|ملف مرفق)\\)`, 'gi'), '')
-  .replace(OMIT, '').trim();
+  .replace(OMIT, '').replace(EDITED, '').trim();
 
 /** First amount after keyword `kw` ("بدايتنا ١٢ الف" -> 12000). */
 export function amountAfter(t, kw) {
@@ -88,6 +90,8 @@ export function prep(m, { shop, has }) {
   if (a) {
     r.file = a.file;
     if (a.missing) return done('المرفق غير موجود في الملف. صدّر المحادثة مع «إرفاق الوسائط».', true);
+    if (STICKER.test(a.file) && !/^pic-/i.test(a.file)) return done('ملصق: ليس من الحساب.');
+    if (/\.gif$/i.test(a.file)) return done('صورة متحركة: ليست من الحساب.');
     if (IMG.test(a.file)) r.img = true;
     else if (VOICE.test(a.file)) return done('رسالة صوتية: استمع إليها وعدّل إن تضمنت مبلغًا.', true);
     else return done('مرفق ليس صورة.');
@@ -280,3 +284,42 @@ export function expressionHtml(terms, total) {
   const parts = terms.map((v, k) => piece((k === 0 ? (v < 0 ? '-' : '') : v < 0 ? '−' : '+') + fmt(Math.abs(v))));
   return parts.join('<wbr>') + (total == null ? '' : '<br>' + piece('=' + fmt(total)));
 }
+
+/* =====================================================================
+   "Our start is this message / picture": the user points at the start; it is found searching from the
+   LAST message back to the first (the newest match wins).
+   ===================================================================== */
+const plain = s => norm(String(s || '')).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+
+/** The text the user pasted: a copied WhatsApp message (with or without its "[date] name:" header) or any part of it. */
+export function markerText(input) {
+  const m = parse(String(input || ''));
+  return plain(m.length ? m.map(x => x.text).join(' ') : input);
+}
+/** Index of the newest message whose text contains the marker (or is contained in it), or -1. */
+export function findTextMarker(msgs, input) {
+  const want = markerText(input);
+  if (want.length < 2) return -1;
+  for (let k = msgs.length - 1; k >= 0; k--) {
+    const have = plain(strip(msgs[k].text));
+    if (have && (have.includes(want) || (have.length >= 6 && want.includes(have)))) return msgs[k].i;
+  }
+  return -1;
+}
+
+/** Picture fingerprint: 64-bit difference hash of a 9×8 grey image (`grey` = 72 values, row by row). */
+export function dhash(grey) {
+  let bits = '';
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) bits += grey[y * 9 + x] > grey[y * 9 + x + 1] ? '1' : '0';
+  return bits;
+}
+/** How different two fingerprints are (0 = same picture; ≤ 10 = the same picture resized / recompressed / forwarded). */
+export function hamming(a, b) {
+  let d = 0;
+  for (let k = 0; k < 64; k++) if (a[k] !== b[k]) d++;
+  return d;
+}
+export const SAME_PICTURE = 10;
+
+/** A row counted in the account (a real transfer or payment). */
+export const isTransaction = r => r.state === 'done' && r.amount > 0 && (r.kind === 'sent' || r.kind === 'received');

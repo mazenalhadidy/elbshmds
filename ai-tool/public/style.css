@@ -90,3 +90,9 @@ label.file.drag{background:var(--v);color:#fff}
 .quote.expr{direction:ltr;text-align:right}
 /* calculations read from the LEFT, like a calculator */
 .calc,.quote.expr{text-align:left}
+.mark{border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-top:14px;color:var(--ink)}
+.mark[open]{background:var(--vs)}
+.mark textarea{margin-top:6px}
+label.file.small{min-height:52px;margin-top:8px}
+#markPreview img{max-height:120px;border-radius:8px;margin-top:8px;display:block}
+.start-btn{font-size:14px}

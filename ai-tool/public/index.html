@@ -52,6 +52,14 @@
   <h2>٢. من يمثّل المحل؟</h2>
   <p class="note">اختر أسماء المحل والموظفين، والباقي هو العميل. وسأجد آخر إقفال للحساب بنفسي.</p>
   <div class="chips" id="senders"></div>
+  <details class="mark" id="markBox">
+    <summary>بدايتنا هي… (اختياري)</summary>
+    <p class="note">الصق نص رسالة البداية أو اختر صورتها. سأبحث عنها من آخر المحادثة إلى أولها، وأبدأ منها.</p>
+    <textarea id="markText" rows="2" placeholder="نص رسالة البداية (أو جزء منه)"></textarea>
+    <label class="file small"><input type="file" id="markPic" accept="image/*"><span id="markPicLabel">أو صورة البداية</span></label>
+    <div id="markPreview"></div>
+    <div class="acts"><button class="ghost hide" id="markClear">إلغاء البداية المحددة</button></div>
+  </details>
   <div class="acts"><button id="go">حلّل</button></div>
   <p id="aiNote" class="warnbox hide"></p>
   <div id="openRow" class="hide">
