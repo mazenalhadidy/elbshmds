@@ -323,3 +323,44 @@ export const SAME_PICTURE = 10;
 
 /** A row counted in the account (a real transfer or payment). */
 export const isTransaction = r => r.state === 'done' && r.amount > 0 && (r.kind === 'sent' || r.kind === 'received');
+
+/* =====================================================================
+   Who represents the shop: learned from your answers, then guessed by the AI for new names.
+   stats = { name: { shop: n, client: n } } — how many times you confirmed each answer.
+   ===================================================================== */
+export const ROLE_MIN = 2, ROLE_SHARE = 0.8;
+
+/** 'shop' / 'client' when your past answers agree enough, else null (still unsure). */
+export function roleFromHistory(stats, name) {
+  const s = stats?.[name]; if (!s) return null;
+  const total = (s.shop || 0) + (s.client || 0);
+  if (total < ROLE_MIN) return null;
+  if ((s.shop || 0) / total >= ROLE_SHARE) return 'shop';
+  if ((s.client || 0) / total >= ROLE_SHARE) return 'client';
+  return null;
+}
+/** Remember the answer used for this analysis (the user saw it and ran with it). */
+export function recordRoles(stats, senders, shopSet) {
+  const out = { ...stats };
+  for (const n of senders) { const s = { shop: 0, client: 0, ...out[n] }; s[shopSet.has(n) ? 'shop' : 'client']++; out[n] = s; }
+  return out;
+}
+/** Older versions kept only a list of shop names: count each as already confirmed twice. */
+export function seedStats(stats, shopNames = []) {
+  const out = { ...stats };
+  for (const n of shopNames) if (!out[n]) out[n] = { shop: ROLE_MIN, client: 0 };
+  return out;
+}
+/** What the AI reads to decide who is who: a sample of each unknown sender's messages. */
+export function rolesInput(msgs, names, { chat = '', known = [] } = {}) {
+  const parts = [`اسم المحادثة: ${chat || '—'}`];
+  if (known.length) parts.push('أسماء عُرف سابقًا أنها من المحل: ' + known.join('، '));
+  for (const n of names) {
+    const mine = msgs.filter(m => m.sender === n && !m.sys);
+    const pics = mine.filter(m => new RegExp(`\\.(${EXT})`, 'i').test(m.text)).length;
+    const texts = mine.map(m => strip(m.text)).filter(Boolean);
+    const sample = [...texts.slice(0, 6), ...texts.slice(-8)].filter((t, k, a) => a.indexOf(t) === k).map(t => '- ' + t.replace(/\n/g, ' ⏎ ').slice(0, 160));
+    parts.push(`المرسل: ${n} (${mine.length} رسالة، ${pics} مرفق)\n${sample.join('\n') || '- (مرفقات فقط)'}`);
+  }
+  return parts.join('\n\n');
+}

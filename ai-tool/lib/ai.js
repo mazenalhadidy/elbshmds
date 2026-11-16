@@ -59,6 +59,11 @@ balance = الرصيد بعد الإقفال (موجب = على العميل). �
     maxTokens: 8000,
     schema: obj({ closings: { type: 'array', items: obj({ i: { type: 'integer' }, balance: { type: 'number' }, kind: { type: 'string', enum: ['statement', 'result', 'agreed', 'day_end', 'other'] }, confidence: { type: 'number' }, why: { type: 'string' } }) } }),
   },
+  roles: {
+    instruction: `حدّد من يمثّل المحل ومن هو العميل لكل مرسل. المحل عادةً: يرسل إيصالات التحويل («تم تحويل…»)، ويكتب «تم» أو «تم ٥٠٠٠٠ فلان»، ويرسل كشف الآلة الحاسبة والناتج، ويعيد توجيه الإيصالات. والعميل عادةً: يطلب («39930»، «40»، «ابعتلي…»)، ويدفع للمحل. قد يكون للمحل أكثر من موظف. استعن بالأسماء المعروفة سابقًا. why: الدليل باختصار.`,
+    maxTokens: 4096,
+    schema: obj({ roles: { type: 'array', items: obj({ sender: { type: 'string' }, side: { type: 'string', enum: ['shop', 'client'] }, confidence: { type: 'number' }, why: { type: 'string' } }) } }),
+  },
   lessons: {
     instruction: 'هذه فترة سابقة بين نقطتي بداية، وجاء حسابي لها خاطئًا. حدّد الرسائل التي أسأتُ فهمها على الأرجح، واستخرج حتى ٣ دروس عامة تفيد لاحقًا (دون أسماء أو مبالغ). إن لم تكن متأكدًا فأرجع قائمة فارغة.',
     maxTokens: 4096,

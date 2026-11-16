@@ -4,6 +4,7 @@
 import {
   esc, fmt, num, clamp, KIND, IMG, MEDIA, parse, strip, prep, applyAnswer, weak,
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
+  roleFromHistory, recordRoles, seedStats, rolesInput,
   linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression, expressionHtml,
   parseStatement, findTextMarker, dhash, hamming, SAME_PICTURE, isTransaction,
 } from './core.js';
@@ -14,7 +15,8 @@ const mime = f => ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', we
 const show = (el, on = true) => $(el).classList.toggle('hide', !on);
 
 /* ===== state ===== */
-const DEF = { shop: [], keywords: ['بدايتنا'], rules: [], learned: '', segs: [], selfChecked: 0 };
+const DEF = { shop: [], shopStats: {}, runs: 0, startMode: 'auto', keywords: ['بدايتنا'], rules: [], learned: '', segs: [], selfChecked: 0 };
+const TRUST_RUNS = 3;                       // after this many analyses you ran, a chat whose people are all known starts by itself
 const KEEP = 39;                    // newest corrections sent as they are; older ones are merged into one summary
 const IMG_AT_ONCE = 4, TEXT_AT_ONCE = 2, BATCH = 40;
 let settings = structuredClone(DEF), examples = [], key = '';
@@ -65,7 +67,7 @@ async function loadStore() {
   if (st) settings = { ...DEF, ...st, keywords: st.keywords?.length ? [...st.keywords] : DEF.keywords };
   if (Array.isArray(ex)) examples = [...ex];
   $('#store').textContent = 'محفوظ أونلاين.';
-  renderRules();
+  renderRules(); setStartMode(settings.startMode === 'mine' ? 'mine' : 'auto');
   setTimeout(mergeOld, 0);
 }
 function showLogin(msg) { show('#login'); $('#pwErr').textContent = msg || ''; show('#pwErr', !!msg); setTimeout(() => $('#pw').focus(), 50); }
@@ -138,18 +140,63 @@ $('#usePics').addEventListener('click', () => {
 });
 
 /* ===== 2. who is the shop ===== */
-function setup() {
+/**
+ * Who is the shop? 1) your past answers (a name confirmed twice the same way is decided)  2) the AI reads the
+ * unknown senders  3) you only check. When everyone is known with confidence (and you have run a few analyses),
+ * the analysis starts by itself — no questions.
+ */
+let senders = [], roleWhy = new Map();
+async function setup() {
   const cnt = new Map();
   for (const m of msgs) if (m.sender && !m.sys) cnt.set(m.sender, (cnt.get(m.sender) || 0) + 1);
-  shop = new Set([...cnt.keys()].filter(s => settings.shop.includes(s) || s === PICS));
-  $('#senders').innerHTML = [...cnt].sort((a, b) => b[1] - a[1]).map(([s, n]) => `<button class="chip" data-s="${esc(s)}" aria-pressed="${shop.has(s)}">${esc(s)}<small>${n}</small></button>`).join('');
-  $('#openBox').innerHTML = ''; show('#openRow', false);
+  senders = [...cnt].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  settings.shopStats = seedStats(settings.shopStats, settings.shop);
+  shop = new Set(); roleWhy = new Map();
+  const unsure = [];
+  for (const n of senders) {
+    const r = n === PICS ? 'shop' : roleFromHistory(settings.shopStats, n);
+    if (r) { if (r === 'shop') shop.add(n); roleWhy.set(n, n === PICS ? 'صور ملصقة' : 'من إجاباتك السابقة'); }
+    else unsure.push(n);
+  }
+  $('#openBox').innerHTML = ''; show('#openRow', false); show('#aiNote', false);
+  drawSenders(cnt);
   show('#step2');
+  let sure = !unsure.length;
+  if (unsure.length && key) {
+    $('#rolesNote').textContent = 'أتعرّف على المرسلين…';
+    try {
+      const known = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
+      const v = await ai('roles', rolesInput(msgs, unsure, { chat: chatName, known }));
+      const got = new Map((v?.roles || []).map(x => [String(x.sender), x]));
+      sure = true;
+      for (const n of unsure) {
+        const x = got.get(n);
+        if (!x) { sure = false; continue; }
+        if (x.side === 'shop') shop.add(n);
+        roleWhy.set(n, String(x.why || ''));
+        if (clamp(x.confidence) < 0.8) sure = false;
+      }
+    } catch { sure = false; }
+    drawSenders(cnt);
+  }
+  const names = s => s.length ? s.join('، ') : '—';
+  $('#rolesNote').textContent = shop.size
+    ? `${sure ? 'عرفتُ' : 'أظن أن'} المحل: ${names(senders.filter(n => shop.has(n)))} · والعميل: ${names(senders.filter(n => !shop.has(n)))}.${sure ? '' : ' راجع الاختيار.'}`
+    : 'اختر أسماء المحل والموظفين، والباقي هو العميل.';
+  // known chat, known people, an experienced user: don't ask, start
+  if (sure && shop.size && settings.runs >= TRUST_RUNS && !busy) {
+    $('#aiNote').textContent = 'بدأتُ التحليل تلقائيًا لأنني أعرف أطراف المحادثة. إن أردت التغيير فعدّل ثم اضغط «حلّل».'; show('#aiNote');
+    $('#go').click();
+  }
+}
+function drawSenders(cnt) {
+  $('#senders').innerHTML = senders.map(n => `<button class="chip" data-s="${esc(n)}" aria-pressed="${shop.has(n)}" title="${esc(roleWhy.get(n) || '')}">${esc(n)}<small>${cnt.get(n)}</small></button>`).join('');
 }
 $('#senders').addEventListener('click', e => {
   const b = e.target.closest('[data-s]'); if (!b) return; const s = b.dataset.s;
-  if (shop.has(s)) { shop.delete(s); settings.shop = settings.shop.filter(x => x !== s); } else { shop.add(s); if (!settings.shop.includes(s) && s !== PICS) settings.shop.push(s); }
-  b.setAttribute('aria-pressed', shop.has(s)); persist('settings');
+  if (shop.has(s)) shop.delete(s); else shop.add(s);
+  roleWhy.set(s, 'اختيارك'); b.setAttribute('aria-pressed', shop.has(s));
+  $('#rolesNote').textContent = 'سأتذكّر اختيارك بعد التحليل.';
 });
 
 /* ===== understanding the chat: where was the account last closed? =====
@@ -213,11 +260,15 @@ const marker = { text: '', hash: null };
 let startMode = 'auto';                      // 'auto' = the AI finds the last closing · 'mine' = I tell it
 $('#startMode').addEventListener('click', e => {
   const b = e.target.closest('[data-mode]'); if (!b) return;
-  startMode = b.dataset.mode;
+  setStartMode(b.dataset.mode);
+});
+function setStartMode(mode) {
+  const b = document.querySelector(`#startMode [data-mode="${mode}"]`); if (!b) return;
+  startMode = mode;
   document.querySelectorAll('#startMode [data-mode]').forEach(x => x.setAttribute('aria-checked', x === b));
   show('#markBox', startMode === 'mine'); show('#autoNote', startMode === 'auto');
   if (startMode === 'mine') setTimeout(() => $('#markText').focus(), 50);
-});
+}
 async function fingerprint(blob) {
   const bmp = await createImageBitmap(blob);
   const c = document.createElement('canvas'); c.width = 9; c.height = 8;
@@ -379,10 +430,14 @@ async function runAnalysis(list, onStep = () => {}) {
   dedupeRefs(list);
   linkGroups(list);
 }
-$('#go').addEventListener('click', async () => {
+$('#go').addEventListener('click', async e => {
   if (busy) return;
   if (!shop.size) { $('#aiNote').textContent = 'اختر اسم المحل أولًا.'; show('#aiNote'); return; }
-  show('#aiNote', false); busy = true; stopped = false; spent = 0; $('#go').disabled = true;
+  if (!e.isTrusted && $('#aiNote').textContent.startsWith('بدأتُ التحليل تلقائيًا')) { /* keep the note */ } else show('#aiNote', false);
+  busy = true; stopped = false; spent = 0; $('#go').disabled = true;
+  settings.shopStats = recordRoles(settings.shopStats, senders.filter(n => n !== PICS), shop);
+  settings.shop = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
+  settings.runs = (settings.runs || 0) + 1; settings.startMode = startMode; persist('settings');
   allRows = msgs.map(m => prep(m, { shop, has })); analyzedFrom = msgs.length; cps = []; cp = null; rows = [];
   show('#sum'); show('#step3');
   let done = 0;
