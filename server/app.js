@@ -114,6 +114,24 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
     return { ...out, snapshot: { ...out.snapshot, lock: lock.info(cid(req)) } };
   }));
 
+  // a wrong تعويض: deleted with the password; later days go back
+  app.post('/api/days/:id/compensations/:cid/delete', (req, res) => send(res, async () => {
+    needEditor(req); needPassword(req);
+    const out = await shop.deleteCompensation({ dayId: req.params.id, compId: req.params.cid }, cid(req));
+    sync?.poke();
+    return { ...out, snapshot: { ...out.snapshot, lock: lock.info(cid(req)) } };
+  }));
+
+  // late changes: «أضف» (password: it changes saved days) or «ارفض»; ids empty = all of them
+  app.post('/api/late', (req, res) => send(res, async () => {
+    needEditor(req);
+    const accept = !!req.body?.accept;
+    if (accept) needPassword(req);
+    const out = await shop.decideLate({ ids: Array.isArray(req.body?.ids) ? req.body.ids : [], accept }, cid(req));
+    sync?.poke();
+    return { ...out, snapshot: { ...out.snapshot, lock: lock.info(cid(req)) } };
+  }));
+
   // the note of any day (open or saved): text only, no password (it changes no number), editing device only
   app.post('/api/days/:id/notes', (req, res) => send(res, async () => {
     needEditor(req);

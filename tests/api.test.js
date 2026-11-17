@@ -48,11 +48,11 @@ describe('server', () => {
   it('editing a saved day: preview, note + password, change flows to the following days', async () => {
     const s = await boot();
     await s.call('POST', '/setup', { opening: 1000 });
-    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'c1', type: 'client', name: 'أحمد', amount: 300 })] });
+    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'c1', type: 'client', name: 'أحمد', amount: 300 }), op({ t: 'setCash', value: 0 })] });
     const d1 = r.body.book.day.id;
     r = await s.call('POST', '/close', { dayId: d1, date: '2026-01-01', password: 'pw' });
     const d2 = r.body.book.day.id;
-    await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e', kind: 'sale', amount: 50 })] });
+    await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e', kind: 'sale', amount: 50 }), op({ t: 'setCash', value: 0 })] });
     r = await s.call('POST', '/close', { dayId: d2, date: '2026-01-02', password: 'pw' });
     expect(r.body.book.day.opening).toBe(300);
     const ops = [op({ t: 'setCalc', id: 'c1', calc: '+200' }), op({ t: 'addEntry', id: 'late-sale', kind: 'sale', amount: 70, name: 'نسيته' })];
@@ -75,7 +75,7 @@ describe('server', () => {
   it('deleting: normal delete keeps history; delete with logs needs the password and keeps saved days', async () => {
     const s = await boot();
     await s.call('POST', '/setup', { opening: 0 });
-    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'w1', type: 'wallet', name: '0100', amount: 50 })] });
+    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'w1', type: 'wallet', name: '0100', amount: 50 }), op({ t: 'setCash', value: 0 })] });
     r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: '2026-02-01', password: 'pw' });
     const d1 = r.body.days[0].id;
     r = await s.call('POST', '/ops', { ops: [op({ t: 'delItem', id: 'w1' })] });
@@ -102,7 +102,7 @@ describe('server', () => {
   it('the note of a saved day: changed from العجوزات, numbers untouched, only by the editing device, logged', async () => {
     const s = await boot();
     await s.call('POST', '/setup', { opening: 1000 });
-    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e1', kind: 'sale', amount: 500 }), op({ t: 'setNotes', notes: 'قديمة' })] });
+    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e1', kind: 'sale', amount: 500 }), op({ t: 'setNotes', notes: 'قديمة' }), op({ t: 'setCash', value: 0 })] });
     r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: r.body.today, password: 'pw' });
     const saved = r.body.days[0];
     expect(saved.notes).toBe('قديمة');

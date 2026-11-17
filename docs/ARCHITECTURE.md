@@ -31,6 +31,10 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 - `days.orig` = the values the day was CLOSED with. A day changed afterwards (تعويض or calendar edit) shows every changed
   value crossed out next to the new one and lists its changes (calendar edits dated with the day itself); a day changed
   only because of an earlier day shows only تصفية البارحة crossed out.
+- Late changes: an op whose `dayId` is a closed day is not applied; it is stored in `late_ops` (status pending), answered
+  "done" to the phone, and shown to every device as «تغييرات متأخرة». `POST /api/late {ids, accept, password}`:
+  accept = one calendar edit per day (only the ops that still fit; the others stay with their error); refuse = dropped.
+- Closing needs `cashChanged || networkChanged` (server-checked).
 - Until today's cash or network is typed, the day shows «بانتظار عدّ النقدية» instead of a fake shortage.
 
 ## Database (server/db/schema.js)

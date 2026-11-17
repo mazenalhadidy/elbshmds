@@ -18,6 +18,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
   let days = await loadDays(db);                   // the list of all days (for the calendar)
   let open = null;                                 // the open day's book
   let rev = Number(await getMeta(db, 'rev', 0));
+  let late = await loadLate();                   // changes written offline for a day that was closed meanwhile
   const openRow = days.find(d => d.status === 'open');
   if (openRow) open = await loadBook(db, openRow.id);
 
@@ -41,6 +42,10 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     }
   };
   const closedDates = () => days.filter(d => d.status === 'closed' && d.date).map(d => d.date);
+  async function loadLate() {
+    return (await db.execute("SELECT op_id, day_id, op, device, at, error FROM late_ops WHERE status='pending' ORDER BY at, op_id")).rows
+      .map(r => ({ opId: r.op_id, dayId: r.day_id, op: JSON.parse(r.op), device: r.device, at: r.at, error: r.error || null }));
+  }
   const refreshDays = async () => { days = await loadDays(db); };
 
   /* ---------- what devices receive ---------- */
@@ -50,6 +55,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       days: days.filter(d => d.status === 'closed'),
       setupNeeded: !open,
       today: today(),
+      late,
     };
   }
 
@@ -76,10 +82,24 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       const seen = new Set();
       for (let i = 0; i < ids.length; i += 500) {
         const part = ids.slice(i, i + 500);
-        const r = await db.execute({ sql: `SELECT op_id FROM op_log WHERE status='ok' AND op_id IN (${part.map(() => '?').join(',')})`, args: part });
+        const r = await db.execute({ sql: `SELECT op_id FROM op_log WHERE status IN ('ok','late') AND op_id IN (${part.map(() => '?').join(',')})`, args: part });
         for (const row of r.rows) seen.add(row.op_id);
       }
-      const fresh = ops.filter(o => !seen.has(o.opId));
+      const closedIds = new Set(days.filter(d => d.status === 'closed').map(d => d.id));
+      const isLate = o => o.dayId && o.dayId !== open.day.id && closedIds.has(o.dayId);
+      const lateOps = ops.filter(o => !seen.has(o.opId) && isLate(o));
+      const fresh = ops.filter(o => !seen.has(o.opId) && !isLate(o));
+      if (lateOps.length) {
+        await write(async (tx, r) => {
+          for (const o of lateOps) {
+            const { password, ...clean } = o;
+            await upsert(tx, 'late_ops', { op_id: o.opId || uid(), day_id: o.dayId, op: JSON.stringify(clean), device: device || null, at: o.ts || now().toISOString(), status: 'pending', error: null, decided_at: null }, r);
+            await upsert(tx, 'op_log', { op_id: o.opId || uid(), at: now().toISOString(), device: device || null, status: 'late', error: null, op: JSON.stringify(clean) }, r);
+          }
+        });
+        late = await loadLate();
+        for (const o of lateOps) seen.add(o.opId);
+      }
       const state = { items: clone(items), book: clone(open) };
       const { done, rejected } = applyAll(state, fresh);
       if (fresh.length) await write(async (tx, r) => {
@@ -97,6 +117,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     return serial(async () => {
       if (!open) throw new UserError('لا يوجد يوم مفتوح');
       if (dayId && dayId !== open.day.id) throw new UserError('اليوم المفتوح تغيّر — حدّث الصفحة ثم أعد المحاولة');
+      if (!open.day.cashChanged && !open.day.networkChanged) throw new UserError('لم تُكتب النقدية ولا المكن');
       try { checkCloseDate(date, today(), closedDates()); } catch (e) { throw new UserError(e.message); }
       const closed = clone(open);
       if (notes !== undefined) closed.day.notes = String(notes);
@@ -206,6 +227,73 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     });
   }
 
+  /**
+   * Late changes: «أضف» = into the saved day they were written for (one calendar edit per day, flows to later days);
+   * a change that no longer fits that day stays in the list with the reason. «ارفض» = dropped (kept in the log).
+   */
+  async function decideLate({ ids, accept }, device) {
+    const want = new Set(ids && ids.length ? ids : late.map(x => x.opId));
+    const chosen = late.filter(x => want.has(x.opId));
+    if (!chosen.length) throw new UserError('لا توجد تغييرات');
+    if (!accept) {
+      await serial(() => write(async (tx, r) => {
+        for (const x of chosen) await upsert(tx, 'late_ops', { op_id: x.opId, day_id: x.dayId, op: JSON.stringify(x.op), device: x.device, at: x.at, status: 'refused', error: null, decided_at: now().toISOString() }, r);
+      }));
+      late = await loadLate();
+      return { accepted: 0, refused: chosen.length, failed: [], snapshot: snapshot() };
+    }
+    const byDay = new Map();
+    for (const x of chosen) { if (!byDay.has(x.dayId)) byDay.set(x.dayId, []); byDay.get(x.dayId).push(x); }
+    const order = [...byDay.keys()].sort((a, b) => (days.find(d => d.id === a)?.seq || 0) - (days.find(d => d.id === b)?.seq || 0));
+    let accepted = 0; const failed = [];
+    for (const dayId of order) {
+      const list = byDay.get(dayId);
+      // which of them still fit that day (checked on a copy, nothing saved)
+      const target = await loadBook(db, dayId);
+      const st = { items: clone(items), book: clone(target) };
+      const ok = [], bad = [];
+      for (const x of list) {
+        const { opId, ts, dayId: _d, dayDate, ...op } = x.op;
+        try { reduce(st, { ...op, ts: x.op.ts }); ok.push({ x, op: { ...op, ts: x.op.ts, opId: x.opId } }); }
+        catch (e) { bad.push({ x, error: e.message }); }
+      }
+      if (ok.length) {
+        const devs = [...new Set(ok.map(o => o.x.device).filter(Boolean))].length;
+        await editDay({ dayId, ops: ok.map(o => o.op), note: `تغييرات متأخرة (${ok.length})${devs > 1 ? ' من أكثر من جهاز' : ''}` }, device);
+        await serial(() => write(async (tx, r) => {
+          for (const { x } of ok) await upsert(tx, 'late_ops', { op_id: x.opId, day_id: x.dayId, op: JSON.stringify(x.op), device: x.device, at: x.at, status: 'accepted', error: null, decided_at: now().toISOString() }, r);
+        }));
+        accepted += ok.length;
+      }
+      if (bad.length) await serial(() => write(async (tx, r) => {
+        for (const { x, error } of bad) await upsert(tx, 'late_ops', { op_id: x.opId, day_id: x.dayId, op: JSON.stringify(x.op), device: x.device, at: x.at, status: 'pending', error, decided_at: null }, r);
+      }));
+      failed.push(...bad.map(b => ({ opId: b.x.opId, error: b.error })));
+    }
+    late = await loadLate();
+    return { accepted, refused: 0, failed, snapshot: snapshot() };
+  }
+
+  /** Delete a تعويض (wrong amount / category): every later day goes back as if it never happened. */
+  async function deleteCompensation({ dayId, compId }, device) {
+    return serial(async () => {
+      const target = await loadBook(db, dayId);
+      if (!target || !target.comps?.[compId]) throw new UserError('غير موجود', 404);
+      const st = { items: clone(items), book: clone(target) };
+      const c = st.book.comps[compId];
+      delete st.book.comps[compId];
+      const { books, changes } = await cascade(target, st);
+      await write(async (tx, r) => {
+        for (const { before, after } of books) await saveBook(tx, before, after, summarize(after, st.items), r);
+        await logOps(tx, r, [{ opId: 'uncomp-' + compId, t: 'deleteCompensation', dayId, compId, field: c.field, amount: c.amount }], device, [], []);
+      });
+      const last = books[books.length - 1].after;
+      if (open && last.day.id === open.day.id) open = last;
+      await refreshDays();
+      return { changes, snapshot: snapshot() };
+    });
+  }
+
   /* ---------- the note of a day (ملاحظات اليوم), also for a saved day: text only, the numbers never change ---------- */
   async function setDayNotes(dayId, notes, device) {
     return serial(async () => {
@@ -268,12 +356,12 @@ export async function createShop(db, { now = () => new Date() } = {}) {
 
   /** Reload everything from the database (after a restore from Turso or the old-data import). */
   async function reload() {
-    items = await loadItems(db); days = await loadDays(db); rev = Number(await getMeta(db, 'rev', 0));
+    items = await loadItems(db); days = await loadDays(db); rev = Number(await getMeta(db, 'rev', 0)); late = await loadLate();
     const o = days.find(d => d.status === 'open'); open = o ? await loadBook(db, o.id) : null;
   }
 
   return {
-    snapshot, setup, applyOps, closeDay, getDay, editDay, compensate, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
+    snapshot, setup, applyOps, closeDay, getDay, editDay, compensate, deleteCompensation, decideLate, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
     get rev() { return rev; }, get openDayId() { return open?.day.id; },
   };
 }

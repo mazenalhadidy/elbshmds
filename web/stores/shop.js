@@ -76,7 +76,9 @@ export const useShop = defineStore('shop', {
       if (!this.snap || !this.snap.book) { this.view = null; return; }
       const st = { items: clone(this.snap.items), book: clone(this.snap.book) };
       const bad = [];
+      const closedIds = new Set((this.snap.days || []).map(d => d.id));
       this.pending = this.pending.filter(op => {
+        if (op.dayId && op.dayId !== st.book.day.id && closedIds.has(op.dayId)) return true;   // late: the server keeps it in «تغييرات متأخرة»
         try { const t = clone(st); reduce(t, op); st.items = t.items; st.book = t.book; return true; }
         catch (e) { bad.push({ op, error: e.message, at: new Date().toISOString() }); return false; }
       });
@@ -199,6 +201,20 @@ export const useShop = defineStore('shop', {
     async compensate({ dayId, field, amount, notes, password }) {
       if (!(await this.flush())) throw new Error('لا يمكن الوصول إلى جهاز المحل الآن');
       const r = await api('POST', `/days/${dayId}/compensate`, { field, amount, notes, password });
+      this.adopt(r.snapshot); this.rebuild();
+      return r;
+    },
+
+    /** «تغييرات متأخرة»: accept (password) or refuse; ids = [] means all of them. */
+    async decideLate({ ids, accept, password }) {
+      if (!(await this.flush())) throw new Error('لا يمكن الوصول إلى جهاز المحل الآن');
+      const r = await api('POST', '/late', { ids, accept, password });
+      this.adopt(r.snapshot); this.rebuild();
+      return r;
+    },
+    /** Delete a wrong تعويض (password); later days go back. */
+    async deleteCompensation({ dayId, compId, password }) {
+      const r = await api('POST', `/days/${dayId}/compensations/${compId}/delete`, { password });
       this.adopt(r.snapshot); this.rebuild();
       return r;
     },

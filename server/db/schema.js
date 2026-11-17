@@ -8,12 +8,12 @@
    the row. The Turso sync sends every row whose rev is newer than the last one sent.
    ===================================================================== */
 
-export const SYNCED_TABLES = ['items', 'days', 'item_days', 'entries', 'adjustments', 'day_edits', 'op_log', 'legacy_archive', 'compensations'];
+export const SYNCED_TABLES = ['items', 'days', 'item_days', 'entries', 'adjustments', 'day_edits', 'op_log', 'legacy_archive', 'compensations', 'late_ops'];
 
 // primary key columns of each synced table (used for upserts and deletes)
 export const KEYS = {
   items: ['id'], days: ['id'], item_days: ['day_id', 'item_id'], entries: ['id'], adjustments: ['id'],
-  day_edits: ['id'], op_log: ['op_id'], legacy_archive: ['id'], compensations: ['id'],
+  day_edits: ['id'], op_log: ['op_id'], legacy_archive: ['id'], compensations: ['id'], late_ops: ['op_id'],
 };
 
 export const MIGRATIONS = [
@@ -110,6 +110,18 @@ export const MIGRATIONS = [
       `UPDATE days SET orig = json_object('opening', opening, 'profit', profit, 'virtual', virtual_total, 'real', real_total, 'diff', diff)
          WHERE orig IS NULL AND status = 'closed'`,
       "UPDATE days SET orig = json_object('opening', opening) WHERE orig IS NULL AND status = 'open'",
+    ],
+  },
+  {
+    version: 5,
+    name: 'late changes: written offline for a day that was closed meanwhile, waiting for the owner',
+    sql: [
+      `CREATE TABLE IF NOT EXISTS late_ops(
+         op_id TEXT PRIMARY KEY, day_id TEXT NOT NULL, op TEXT NOT NULL, device TEXT, at TEXT,
+         status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','accepted','refused')), error TEXT,
+         decided_at TEXT, rev INTEGER NOT NULL DEFAULT 0)`,
+      'CREATE INDEX IF NOT EXISTS late_ops_status ON late_ops(status, day_id)',
+      'CREATE INDEX IF NOT EXISTS late_ops_rev ON late_ops(rev)',
     ],
   },
 ];

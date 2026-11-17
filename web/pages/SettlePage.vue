@@ -7,11 +7,12 @@
 import { ref, computed } from 'vue';
 import { useShop } from '@/stores/shop.js';
 import { useToasts } from '@/stores/toasts.js';
-import { fmt, fmtDate } from '@shared/money.js';
+import { fmt, fmtDate, toArabicDigits } from '@shared/money.js';
 import SummaryPanel from '@/components/SummaryPanel.vue';
 import Calendar from '@/components/Calendar.vue';
 import PasswordDialog from '@/components/PasswordDialog.vue';
 import DayDialog from '@/components/DayDialog.vue';
+import LateDialog from '@/components/LateDialog.vue';
 import Modal from '@/components/Modal.vue';
 import MoneyInput from '@/components/MoneyInput.vue';
 import Icon from '@/components/Icon.vue';
@@ -24,7 +25,11 @@ const today = computed(() => shop.snap?.today);
 const taken = computed(() => new Set(saved.value.map(d => d.date)));
 const chosen = ref(null);
 const date = computed(() => chosen.value || (today.value && !taken.value.has(today.value) ? today.value : null));
-const asking = ref(false), dayOpen = ref(null), openingEdit = ref(null);
+const asking = ref(false), dayOpen = ref(null), openingEdit = ref(null), lateOpen = ref(false);
+const lateCount = computed(() => (shop.snap?.late || []).length);
+// closing with a date before the last saved day is allowed, with a warning
+const lastSaved = computed(() => saved.value.filter(d => d.date).map(d => d.date).sort().pop() || null);
+const beforeLast = computed(() => !!(date.value && lastSaved.value && date.value < lastSaved.value));
 const canEditOpening = computed(() => shop.book?.day.seq === 1 && shop.canEdit);
 // the running total of the saved days (hidden while a saved day is being edited: it would mix two different days)
 const cum = computed(() => (shop.view?.editing ? null : cumulative(saved.value)));
@@ -42,7 +47,10 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
   <div class="page narrow stack" v-if="s">
     <SummaryPanel :s="s" :editable-opening="canEditOpening" :uncounted="uncounted" :cumulative="cum" :orig="shop.view?.editing ? null : shop.book?.day.orig" @edit-opening="openingEdit = s.opening ?? ''">
       <template #top>
-        <div class="top-btn"><RouterLink to="/settle/deficits" class="btn wide deficits-btn" data-test="deficits-btn"><Icon name="list" /> العجوزات</RouterLink></div>
+        <div class="top-btn">
+          <RouterLink to="/settle/deficits" class="btn wide deficits-btn" data-test="deficits-btn"><Icon name="list" /> العجوزات</RouterLink>
+          <button v-if="lateCount && !shop.view?.editing" class="btn wide late-btn" data-test="late-btn" @click="lateOpen = true">تغييرات متأخرة <span class="badge">{{ toArabicDigits(lateCount) }}</span></button>
+        </div>
       </template>
     </SummaryPanel>
 
@@ -58,7 +66,8 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
         <template v-if="!shop.view.editing">
           <p class="hint" style="text-align:center">{{ date ? fmtDate(date) : 'اختر تاريخًا' }}</p>
           <p v-if="!shop.lock.editor" class="hint warn-hint" style="text-align:center">وضع المشاهدة فقط</p>
-          <button class="btn primary wide" style="margin-top:12px;min-height:48px;font-size:16px" :disabled="!date || !shop.lock.editor" @click="asking = true">إنهاء اليوم</button>
+          <button class="btn primary wide" style="margin-top:12px;min-height:48px;font-size:16px" :disabled="!date || !shop.lock.editor || uncounted" @click="asking = true">إنهاء اليوم</button>
+          <p v-if="uncounted && shop.lock.editor" class="hint warn-hint" style="text-align:center" data-test="need-cash">⚠️ لم تُكتب النقدية ولا المكن</p>
         </template>
       </div>
     </section>
@@ -69,9 +78,10 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
         <div class="between"><span class="muted">التصفية الحقيقية</span><b class="num">{{ fmt(s.real) }}</b></div>
         <div v-if="s.diff" class="between"><span :class="s.diff > 0 ? 'neg' : 'pos'">{{ s.diff > 0 ? 'عجز' : 'زيادة' }}</span><b class="num" :class="s.diff > 0 ? 'neg' : 'pos'">{{ fmt(Math.abs(s.diff)) }}</b></div>
       </div>
-      <p v-if="uncounted" class="hint warn-hint">⚠️ لم تُكتب النقدية ولا المكن</p>
+      <p v-if="beforeLast" class="hint warn-hint" data-test="before-last">⚠️ التاريخ قبل آخر يوم محفوظ ({{ fmtDate(lastSaved) }})</p>
     </PasswordDialog>
     <DayDialog v-if="dayOpen" :day="dayOpen" @close="dayOpen = null" />
+    <LateDialog v-if="lateOpen" @close="lateOpen = false" />
     <Modal v-if="openingEdit !== null" title="تصفية البارحة لأول يوم" @close="openingEdit = null">
       <MoneyInput v-model="openingEdit" @enter="saveOpening" />
       <template #footer><button class="btn" @click="openingEdit = null">إلغاء</button><button class="btn primary" @click="saveOpening">حفظ</button></template>
@@ -82,5 +92,8 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
 .top-btn { padding: 8px 18px 12px; border-bottom: 1px solid var(--line); }
 .deficits-btn { min-height: 46px; text-decoration: none; font-weight: 650; color: var(--brand-ink); background: var(--brand-soft); border-color: transparent; }
 .deficits-btn:hover { background: #e7defa; }
+.top-btn { display: grid; gap: 8px; }
+.late-btn { min-height: 42px; font-weight: 650; color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.badge { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: var(--warn); color: #fff; font-size: 13px; }
 .close-sum { display: grid; gap: 6px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface-2); border-radius: var(--radius-sm); }
 </style>

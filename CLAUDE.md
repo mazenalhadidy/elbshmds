@@ -46,6 +46,14 @@ described there; extend it. Every change is small and in the existing style.
 - `days.orig` = values the day was closed with. A changed day crosses out every changed value and lists its changes at
   the end of its summary (التاريخ | التغيير | الملاحظة); calendar edits are listed too, dated with the day itself.
   Later days changed only by an earlier day cross out ONLY تصفية البارحة.
+- A wrong تعويض is deleted from the saved day's changes table (password); later days go back.
+- **Closing a day**: blocked until today's cash or المكن is typed (0 counts). A date before the last saved day is
+  allowed, with a warning in the close dialog.
+- **Late changes** (written offline for a day that was closed meanwhile): the closed day is NEVER changed by itself.
+  The server keeps them (table `late_ops`, no message on the phone) behind «تغييرات متأخرة (n)» on «التصفية»:
+  per change «أضف» (into its saved day, password, flows like a calendar edit) or «ارفض»; also «أضف الكل» /
+  «ارفض الكل». A change that no longer fits its day stays in the list with the reason.
+- Renaming / restoring an item can never create two ACTIVE items of the same type with the same name.
 - Database: never edit an old migration; add a new one at the end of `server/db/schema.js`.
 
 ## AI tool decisions (`ai-tool/`)
