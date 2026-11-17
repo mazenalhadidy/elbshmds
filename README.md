@@ -30,6 +30,7 @@ See **docs/SETUP-WINDOWS.md** (step by step, nothing to install except Node.js).
 
 Where to change things:
 - Formulas (التصفية, carry to the next day, date rules): `shared/engine.js` — every rule is explained at the top.
+- العجوزات (words, running total, the list): `shared/deficits.js`; the screen: `web/components/DeficitsDialog.vue`.
 - Number display / calculator parsing: `shared/money.js`.
 - Colors, sizes, fonts: `web/styles/base.css` (all in one place, at the top).
 - Page names and order of the menu: `web/router.js`.

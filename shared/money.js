@@ -75,4 +75,6 @@ export function evalCalc(text) {
 }
 
 /** "2026-11-12" -> "١٢ نوفمبر ٢٠٢٦" */
+/** "الاثنين" for "2026-11-16". */
+export const fmtWeekday = d => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('ar-EG', { weekday: 'long', timeZone: 'UTC' }) : '');
 export const fmtDate = d => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '');

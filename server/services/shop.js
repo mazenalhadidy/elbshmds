@@ -165,6 +165,26 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     });
   }
 
+  /* ---------- the note of a day (ملاحظات اليوم), also for a saved day: text only, the numbers never change ---------- */
+  async function setDayNotes(dayId, notes, device) {
+    return serial(async () => {
+      const text = String(notes ?? '');
+      if (text.length > 5000) throw new UserError('الملاحظة طويلة جدًا');
+      const isOpen = dayId === open?.day.id;
+      const before = isOpen ? open : await loadBook(db, dayId);
+      if (!before) throw new UserError('اليوم غير موجود', 404);
+      if ((before.day.notes || '') === text) return snapshot();
+      const after = clone(before); after.day.notes = text;
+      await write(async (tx, r) => {
+        await saveBook(tx, before, after, summarize(after, items), r);
+        await logOps(tx, r, [{ opId: 'notes-' + dayId + '-' + uid(), t: 'setDayNotes', dayId, notes: text }], device, [], []);
+      });
+      if (isOpen) open = after;
+      await refreshDays();
+      return snapshot();
+    });
+  }
+
   /* ---------- deleting an item with its log (password checked by the route) ---------- */
   async function purgeItem(id, device) {
     return serial(async () => {
@@ -212,7 +232,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
   }
 
   return {
-    snapshot, setup, applyOps, closeDay, getDay, editDay, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
+    snapshot, setup, applyOps, closeDay, getDay, editDay, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
     get rev() { return rev; }, get openDayId() { return open?.day.id; },
   };
 }

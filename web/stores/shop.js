@@ -185,6 +185,16 @@ export const useShop = defineStore('shop', {
       return r;
     },
 
+    /**
+     * The note of a day. Today's note goes through the normal (offline-safe) way; a saved day's note is sent
+     * to the shop computer straight away (it needs a connection, like opening a saved day).
+     */
+    async saveDayNotes(dayId, notes) {
+      if (dayId === this.snap?.book?.day.id) { if (!this.dispatch({ t: 'setNotes', notes }, { quiet: true })) throw new Error('وضع المشاهدة فقط'); return; }
+      const r = await api('POST', `/days/${dayId}/notes`, { notes });
+      this.adopt(r); this.rebuild();
+    },
+
     /* ---------------- items ---------------- */
     itemHistory: id => api('GET', `/items/${id}/history`),
     async purgeItem(id, password) { await this.flush(); const r = await api('POST', `/items/${id}/purge`, { password }); this.adopt(r); this.rebuild(); },

@@ -16,6 +16,8 @@ const P = {
   lock: 'M6 11h12v9H6zM9 11V8a3 3 0 0 1 6 0v3',
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   calc: 'M6 3h12v18H6zM9 7h6M9 11h.01M12 11h.01M15 11h.01M9 15h.01M12 15h.01M15 15h.01',
+  note: 'M5 4h10l4 4v12H5zM14 4v5h5M8 13h8M8 17h5',
+  list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
 };
 </script>
 <template>

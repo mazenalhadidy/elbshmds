@@ -106,6 +106,13 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
     return out.snapshot ? { ...out, snapshot: { ...out.snapshot, lock: lock.info(cid(req)) } } : out;
   }));
 
+  // the note of any day (open or saved): text only, no password (it changes no number), editing device only
+  app.post('/api/days/:id/notes', (req, res) => send(res, async () => {
+    needEditor(req);
+    const snap = await shop.setDayNotes(req.params.id, req.body?.notes, cid(req)); sync?.poke();
+    return { ...snap, lock: lock.info(cid(req)) };
+  }));
+
   app.get('/api/items/:id/history', (req, res) => send(res, () => shop.itemHistory(req.params.id)));
   app.post('/api/items/:id/purge', (req, res) => send(res, async () => {
     needEditor(req); needPassword(req);

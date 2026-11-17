@@ -16,6 +16,14 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
   (clients and debts carry their final value). Inputs/outputs/sales, cash, network, adjustments and notes start empty.
 - Editing a saved day: the change flows to every later day (in the order they were worked), unless a later day changed that value itself.
 
+## العجوزات (shared/deficits.js)
+- Every saved day keeps its عجز / زيادة (`days.diff` = افتراضي − حقيقي; positive = عجز). Shown WITHOUT a minus sign:
+  the word (عجز / زيادة) and the colour say which one it is.
+- عجز / زيادة تراكمي = the sum of all saved days. On «التصفية»: the total until now, and the total after this day (bold).
+- «العجوزات» lists every saved day (newest first) with its note. The note IS that day's «ملاحظات اليوم»:
+  `POST /api/days/:id/notes` changes only the text (no number, no password; editing device only; logged in op_log).
+- Until today's cash or network is typed, the day shows «بانتظار عدّ النقدية» instead of a fake shortage.
+
 ## Database (server/db/schema.js)
 | Table | What |
 |---|---|

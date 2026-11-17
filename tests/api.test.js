@@ -98,4 +98,29 @@ describe('server', () => {
     expect(r.body.total).toBe(150); expect(r.body.count).toBe(2);
     s.close();
   });
+
+  it('the note of a saved day: changed from العجوزات, numbers untouched, only by the editing device, logged', async () => {
+    const s = await boot();
+    await s.call('POST', '/setup', { opening: 1000 });
+    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e1', kind: 'sale', amount: 500 }), op({ t: 'setNotes', notes: 'قديمة' })] });
+    r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: r.body.today, password: 'pw' });
+    const saved = r.body.days[0];
+    expect(saved.notes).toBe('قديمة');
+    r = await s.call('POST', `/days/${saved.id}/notes`, { notes: 'نقص ٥٠٠ في الدرج' });
+    expect(r.status).toBe(200);
+    const after = r.body.days.find(d => d.id === saved.id);
+    expect(after.notes).toBe('نقص ٥٠٠ في الدرج');
+    expect([after.virtual, after.real, after.diff]).toEqual([saved.virtual, saved.real, saved.diff]);   // no number changed
+    expect((await s.call('GET', '/days/' + saved.id)).body.book.day.notes).toBe('نقص ٥٠٠ في الدرج');
+    // view-only device: refused; unknown day: 404; far too long: refused
+    expect((await s.call('POST', `/days/${saved.id}/notes`, { notes: 'x' }, 'B')).status).toBe(403);
+    expect((await s.call('POST', '/days/nope/notes', { notes: 'x' })).status).toBe(404);
+    expect((await s.call('POST', `/days/${saved.id}/notes`, { notes: 'x'.repeat(5001) })).status).toBe(400);
+    const log = (await s.local.execute("SELECT op FROM op_log WHERE op LIKE '%setDayNotes%'")).rows;
+    expect(log).toHaveLength(1);
+    // the open day works the same way
+    r = await s.call('POST', `/days/${r.body?.book?.day?.id || (await s.call('GET', '/state')).body.book.day.id}/notes`, { notes: 'اليوم' });
+    expect((await s.call('GET', '/state')).body.book.day.notes).toBe('اليوم');
+    s.close();
+  });
 });
