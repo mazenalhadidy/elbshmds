@@ -23,15 +23,18 @@ async function edit() {
   try { await shop.startEdit(props.day.id); emit('close'); } catch (e) { err.value = e.status ? e.message : 'يحتاج اتصالًا بجهاز المحل'; }
   busy.value = false;
 }
-const when = s => toArabicDigits(new Date(s).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }));
+// the date takes little room: a short date, the time under it
+const shortDate = s => { const d = new Date(s), y = d.getFullYear() !== new Date().getFullYear(); return toArabicDigits(d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', ...(y ? { year: '2-digit' } : {}) })); };   // the year only when it is not this year
+const shortTime = s => toArabicDigits(new Date(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
 /** Every change made on this day after it was closed, oldest first. */
 const changes = computed(() => {
   if (!data.value) return [];
-  const edits = data.value.edits.map(e => ({ key: e.id, at: fmtDate(props.day.date), what: e.changes.described.join('، '), note: e.note }));
+  // calendar edits: as if the day was closed that way -> dated with the day itself, no time
+  const edits = data.value.edits.map(e => ({ key: e.id, day: shortDate(props.day.date + 'T00:00:00'), time: '', what: e.changes.described.join('، '), note: e.note }));
   const comps = Object.values(data.value.book.comps || {}).sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).map(c => ({
-    key: c.id, at: when(c.createdAt),
+    key: c.id, day: shortDate(c.createdAt), time: shortTime(c.createdAt),
     // shown as: تعويض [+١١٬٠٠٠] على المحافظ — the signed amount in its own left-to-right box (sign in front of the number)
-    what: 'تعويض', amount: (c.amount > 0 ? '+' : '−') + fmt(Math.abs(c.amount)), rest: `${c.amount > 0 ? 'على' : 'من'} ${COMP_FIELDS[c.field] || c.field}`,
+    what: '', amount: (c.amount > 0 ? '+' : '−') + fmt(Math.abs(c.amount)), rest: `${c.amount > 0 ? 'على' : 'من'} ${COMP_FIELDS[c.field] || c.field}`,
     note: c.note,
   }));
   return [...edits, ...comps];
@@ -49,7 +52,11 @@ const changes = computed(() => {
             <table class="tbl" data-test="day-changes">
               <thead><tr><th>التاريخ</th><th>التغيير</th><th>الملاحظة</th></tr></thead>
               <tbody>
-                <tr v-for="c in changes" :key="c.key"><td class="nowrap muted small">{{ c.at }}</td><td>{{ c.what }}<template v-if="c.amount"> <bdi dir="ltr" class="amt">{{ c.amount }}</bdi> {{ c.rest }}</template></td><td class="note">{{ c.note || '—' }}</td></tr>
+                <tr v-for="c in changes" :key="c.key">
+                  <td class="when muted"><div>{{ c.day }}</div><div v-if="c.time">{{ c.time }}</div></td>
+                  <td class="what" :class="{ one: c.amount }">{{ c.what }}<template v-if="c.amount"><bdi dir="ltr" class="amt">{{ c.amount }}</bdi> {{ c.rest }}</template></td>
+                  <td class="note">{{ c.note || '—' }}</td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -64,13 +71,16 @@ const changes = computed(() => {
   </Modal>
 </template>
 <style scoped>
-.changes { border-top: 1px solid var(--line); padding: 10px 18px 6px; }
+.changes { border-top: 1px solid var(--line); padding: 10px 10px 6px; }
 .changes h4 { margin: 0 0 6px; font-size: 14px; }
-.changes .tbl { table-layout: fixed; width: 100%; }
-.changes .tbl th, .changes .tbl td { text-align: right; overflow-wrap: anywhere; }
-.changes .tbl th:nth-child(1) { width: 28%; } .changes .tbl th:nth-child(2) { width: 34%; }
-.changes .tbl td { height: auto; padding: 8px 8px; font-size: 14px; }
+/* the space goes to the change and the note: the date is narrow (date / time on two lines), the change stays on one line */
+.changes .tbl { width: 100%; }
+.changes .tbl th, .changes .tbl td { text-align: right; vertical-align: top; }
+.changes .tbl td { height: auto; padding: 8px 6px; font-size: 14px; }
+.changes .when { width: 1%; white-space: nowrap; font-size: 11.5px; line-height: 1.5; }
+.changes .what.one { white-space: nowrap; width: 1%; }
+.changes .note { overflow-wrap: break-word; }            /* never cuts a number or a phone number in two */
 .changes .note { white-space: pre-wrap; color: var(--muted); }
 .nowrap { white-space: nowrap; }
-.amt { font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; margin-inline: 4px; }
+.amt { font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; margin-inline-end: 4px; }
 </style>
