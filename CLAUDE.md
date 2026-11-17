@@ -46,6 +46,7 @@ described there; extend it. Every change is small and in the existing style.
 - `days.orig` = values the day was closed with. A changed day crosses out every changed value and lists its changes at
   the end of its summary (التاريخ | التغيير | الملاحظة); calendar edits are listed too, dated with the day itself.
   Later days changed only by an earlier day cross out ONLY تصفية البارحة.
+- تعويض is ONLY for saved (closed) days: the open day is changed directly and has no عجز/زيادة until it is closed.
 - A wrong تعويض is deleted from the saved day's changes table (password); later days go back.
 - **Closing a day**: blocked until today's cash or المكن is typed (0 counts). A date before the last saved day is
   allowed, with a warning in the close dialog.
