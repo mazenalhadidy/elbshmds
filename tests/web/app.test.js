@@ -100,16 +100,16 @@ describe('screens', () => {
     expect(w.find('[data-test=deficits-btn]').exists()).toBe(true);
     expect(w.find('[data-test=cum-before]').text()).toContain('مطابق تراكميًا');          // the saved day ended exactly
     // العجوزات: the saved day, its note opened, changed, saved by closing it
-    await w.find('[data-test=deficits-btn]').trigger('click'); await flushPromises();
-    expect(document.querySelectorAll('[data-test=def-rec]')).toHaveLength(1);
-    const rec = document.querySelector('[data-test=def-rec]');
-    expect(rec.textContent).toContain('التصفية الافتراضية'); expect(rec.textContent).toContain('مطابق');
-    rec.querySelector('.note-btn').click(); await flushPromises();
-    const ta = rec.querySelector('textarea'); ta.value = 'ملاحظة من العجوزات'; ta.dispatchEvent(new Event('input')); await nextTick();
-    [...rec.querySelectorAll('button')].find(b => b.textContent.trim() === 'إغلاق').click();
+    await router.push('/settle/deficits'); await flushPromises();
+    expect(w.findAll('[data-test=def-rec]')).toHaveLength(1);                         // one row per saved day
+    const rec = w.find('[data-test=def-rec]');
+    expect(rec.findAll('td')).toHaveLength(5); expect(rec.text()).toContain('مطابق');
+    await rec.find('.note-btn').trigger('click'); await flushPromises();
+    const ta = w.find('.note-row textarea'); await ta.setValue('ملاحظة من العجوزات');
+    await w.findAll('.note-row button').find(b => b.text() === 'إغلاق').trigger('click');
     await until(() => shop.snap.days[0].notes === 'ملاحظة من العجوزات', 'note saved');
     expect(document.body.textContent).toContain('تم حفظ الملاحظة');
-    [...document.querySelectorAll('[role=dialog] button')].find(b => b.getAttribute('aria-label') === 'إغلاق').click(); await flushPromises();
+    await router.push('/settle'); await flushPromises();
 
     // OFFLINE: changes appear at once, wait, then arrive
     offline = true;

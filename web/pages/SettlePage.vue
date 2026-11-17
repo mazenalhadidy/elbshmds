@@ -14,7 +14,6 @@ import PasswordDialog from '@/components/PasswordDialog.vue';
 import DayDialog from '@/components/DayDialog.vue';
 import Modal from '@/components/Modal.vue';
 import MoneyInput from '@/components/MoneyInput.vue';
-import DeficitsDialog from '@/components/DeficitsDialog.vue';
 import Icon from '@/components/Icon.vue';
 import { cumulative } from '@shared/deficits.js';
 
@@ -29,7 +28,6 @@ const asking = ref(false), dayOpen = ref(null), openingEdit = ref(null);
 const canEditOpening = computed(() => shop.book?.day.seq === 1 && shop.canEdit);
 // the running total of the saved days (hidden while a saved day is being edited: it would mix two different days)
 const cum = computed(() => (shop.view?.editing ? null : cumulative(saved.value)));
-const deficitsOpen = ref(false);
 const uncounted = computed(() => !!shop.book && !shop.book.day.cashChanged && !shop.book.day.networkChanged);
 
 function notes(e) { shop.dispatch({ t: 'setNotes', notes: e.target.value }, { quiet: true }); }
@@ -44,7 +42,7 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
   <div class="page narrow stack" v-if="s">
     <SummaryPanel :s="s" :editable-opening="canEditOpening" :uncounted="uncounted" :cumulative="cum" @edit-opening="openingEdit = s.opening ?? ''">
       <template #top>
-        <div class="top-btn"><button class="btn wide deficits-btn" data-test="deficits-btn" @click="deficitsOpen = true"><Icon name="list" /> العجوزات</button></div>
+        <div class="top-btn"><RouterLink to="/settle/deficits" class="btn wide deficits-btn" data-test="deficits-btn"><Icon name="list" /> العجوزات</RouterLink></div>
       </template>
     </SummaryPanel>
 
@@ -72,7 +70,6 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
       <p class="hint">بعد الحفظ يمكن تعديله فقط من التقويم مع كتابة السبب وكلمة المرور.</p>
     </PasswordDialog>
     <DayDialog v-if="dayOpen" :day="dayOpen" @close="dayOpen = null" />
-    <DeficitsDialog v-if="deficitsOpen" @close="deficitsOpen = false" />
     <Modal v-if="openingEdit !== null" title="تصفية البارحة لأول يوم" @close="openingEdit = null">
       <MoneyInput v-model="openingEdit" @enter="saveOpening" />
       <template #footer><button class="btn" @click="openingEdit = null">إلغاء</button><button class="btn primary" @click="saveOpening">حفظ</button></template>
@@ -81,6 +78,6 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
 </template>
 <style scoped>
 .top-btn { padding: 8px 18px 12px; border-bottom: 1px solid var(--line); }
-.deficits-btn { min-height: 46px; font-weight: 650; color: var(--brand-ink); background: var(--brand-soft); border-color: transparent; }
+.deficits-btn { min-height: 46px; text-decoration: none; font-weight: 650; color: var(--brand-ink); background: var(--brand-soft); border-color: transparent; }
 .deficits-btn:hover { background: #e7defa; }
 </style>

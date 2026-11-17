@@ -2,12 +2,16 @@
 <script setup>
 import { useShop } from '@/stores/shop.js';
 import { pages } from './router.js';
+import { useRoute } from 'vue-router';
 import LoginScreen from './components/LoginScreen.vue';
 import SetupScreen from './components/SetupScreen.vue';
 import EditBar from './components/EditBar.vue';
 import StatusDot from './components/StatusDot.vue';
 import Toasts from './components/Toasts.vue';
 const shop = useShop();
+// a tab is highlighted on its page and on the pages under it (/settle/deficits -> «التصفية»)
+const route = useRoute();
+const isOn = p => route.path === p.path || (p.path !== '/' && route.path.startsWith(p.path + '/'));
 </script>
 <template>
   <template v-if="!shop.loggedIn"><LoginScreen /></template>
@@ -19,7 +23,7 @@ const shop = useShop();
       <div class="bar">
         <div class="brand"><img src="/icon.svg" width="30" height="30" alt="" /><b>محل الباشمهندس</b></div>
         <nav class="desk-only" aria-label="القائمة">
-          <RouterLink v-for="p in pages" :key="p.name" :to="p.path" class="tab" active-class="" exact-active-class="on">{{ p.label }}</RouterLink>
+          <RouterLink v-for="p in pages" :key="p.name" :to="p.path" class="tab" active-class="" :class="{ on: isOn(p) }">{{ p.label }}</RouterLink>
         </nav>
         <div class="end">
           <span v-if="!shop.lock.editor && !shop.editing" class="viewonly">مشاهدة فقط <button class="btn sm" @click="shop.takeOver()">تولّي التعديل</button></span>
@@ -29,7 +33,7 @@ const shop = useShop();
     <EditBar v-if="shop.editing" />
     <main><RouterView /></main>
     <nav class="bottom phone-only" aria-label="القائمة">
-      <RouterLink v-for="p in pages" :key="p.name" :to="p.path" class="tab" active-class="" exact-active-class="on">{{ p.label }}</RouterLink>
+      <RouterLink v-for="p in pages" :key="p.name" :to="p.path" class="tab" active-class="" :class="{ on: isOn(p) }">{{ p.label }}</RouterLink>
     </nav>
     <StatusDot />
   </template>

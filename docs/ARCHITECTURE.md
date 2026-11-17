@@ -20,7 +20,7 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 - Every saved day keeps its عجز / زيادة (`days.diff` = افتراضي − حقيقي; positive = عجز). Shown WITHOUT a minus sign:
   the word (عجز / زيادة) and the colour say which one it is.
 - عجز / زيادة تراكمي = the sum of all saved days. On «التصفية»: the total until now, and the total after this day (bold).
-- «العجوزات» lists every saved day (newest first) with its note. The note IS that day's «ملاحظات اليوم»:
+- «العجوزات» (page `/deficits`, one row per saved day, newest first) shows each day with its note. The note IS that day's «ملاحظات اليوم»:
   `POST /api/days/:id/notes` changes only the text (no number, no password; editing device only; logged in op_log).
 - Until today's cash or network is typed, the day shows «بانتظار عدّ النقدية» instead of a fake shortage.
 

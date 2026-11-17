@@ -4,6 +4,7 @@ import JournalPage from './pages/JournalPage.vue';
 import AccountsPage from './pages/AccountsPage.vue';
 import ManagePage from './pages/ManagePage.vue';
 import SettlePage from './pages/SettlePage.vue';
+import DeficitsPage from './pages/DeficitsPage.vue';
 
 export const pages = [
   { path: '/', name: 'journal', label: 'اليومية', component: JournalPage },
@@ -13,5 +14,6 @@ export const pages = [
 ];
 export const makeRouter = (memory = false) => createRouter({
   history: memory ? createMemoryHistory() : createWebHistory(),
-  routes: [...pages, { path: '/:p(.*)*', redirect: '/' }],
+  // «العجوزات» is opened from «التصفية» (its button); it is not a tab of its own, the «التصفية» tab stays highlighted
+  routes: [...pages, { path: '/settle/deficits', name: 'deficits', component: DeficitsPage }, { path: '/:p(.*)*', redirect: '/' }],
 });
