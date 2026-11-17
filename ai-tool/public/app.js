@@ -516,15 +516,16 @@ function finalCalc() {
   return { rec, eq: after.length ? equation(openVal(), after) : rec.eq };
 }
 function renderCheck(rec) {
+  const n = v => '\u2066' + (v < 0 ? '−' : '') + fmt(Math.abs(v)) + '\u2069';   // isolated left-to-right number
   if (!rec) return '';
   const ok = rec.items.filter(x => x.status === 'ok').length, miss = rec.items.filter(x => x.status === 'missing');
   const out = [`الكشف: وجدتُ ${ok} من ${rec.items.length} بندًا في المحادثة ✓`];
-  out.push(`وُجدت في المحادثة: ${rec.items.filter(x => x.status === 'ok').map(x => fmt(x.amount)).join('، ') || '—'}`);
-  if (rec.before.length) out.push(`منقولة من الآلة الحاسبة، وهي قبل بداية المحادثة (ليست خطأ): ${rec.before.map(fmt).join('، ')}`);
-  if (miss.length) out.push(`⚠️ في الكشف وليست في المحادثة: ${miss.map(x => fmt(x.amount)).join('، ')}`);
-  if (rec.extra.length) out.push(`⚠️ في المحادثة وليست في الكشف: ${rec.extra.map(x => fmt(x.amount)).join('، ')}`);
+  out.push(`وُجدت في المحادثة: ${rec.items.filter(x => x.status === 'ok').map(x => n(x.amount)).join('، ') || '—'}`);
+  if (rec.before.length) out.push(`منقولة من الآلة الحاسبة، وهي قبل بداية المحادثة (ليست خطأ): ${rec.before.map(n).join('، ')}`);
+  if (miss.length) out.push(`⚠️ في الكشف وليست في المحادثة: ${miss.map(x => n(x.amount)).join('، ')}`);
+  if (rec.extra.length) out.push(`⚠️ في المحادثة وليست في الكشف: ${rec.extra.map(x => n(x.amount)).join('، ')}`);
   if (!rec.arithmeticOk) out.push('⚠️ جمع الكشف نفسه خاطئ');
-  out.push(rec.matches ? `✓ الناتج ${fmt(rec.stated)} صحيح` : `⚠️ حسابي ${fmt(rec.eq.total)} والكشف ${fmt(rec.stated)} (الفرق ${fmt(rec.eq.total - rec.stated)})`);
+  out.push(rec.matches ? `✓ الناتج ${n(rec.stated)} صحيح` : `⚠️ حسابي ${n(rec.eq.total)} والكشف ${n(rec.stated)} (الفرق ${n(rec.eq.total - rec.stated)})`);
   return out.join('\n');
 }
 function render() {
@@ -536,7 +537,10 @@ function render() {
   for (const r of rows) r.tag = tag.get(r.i) || (r.partOf != null ? `ضمن #${r.partOf}` : '');
   $('#debt').textContent = fmt(Math.abs(c.debt)) + ' ج.م';
   $('#debtLabel').textContent = c.debt >= 0 ? 'على العميل' : 'للعميل عندنا';
-  $('#sOpen').textContent = fmt(openVal()); $('#sSent').textContent = fmt(c.s); $('#sRec').textContent = fmt(c.rc);
+  const [first = 0, ...ops] = fc.eq.terms;
+  $('#sOpen').textContent = fmt(first);
+  $('#sSent').textContent = fmt(ops.filter(v => v > 0).reduce((x, v) => x + v, 0));
+  $('#sRec').textContent = fmt(-ops.filter(v => v < 0).reduce((x, v) => x + v, 0));
   $('#revN').textContent = c.rev || '';
   const needs = r => (r.flag && !r.ok) || r.state === 'error';
   const vis = rows.filter(r => !r.sys && !r.start && (filter === 'all' || (filter === 'review' ? needs(r) : r.kind !== 'ignore' || needs(r) || r.dirty || r.state !== 'done')));
