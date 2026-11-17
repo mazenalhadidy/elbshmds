@@ -16,7 +16,7 @@ const debtTotal = computed(() => shop.summary?.debts || 0);
       <ItemTable type="client" title="العملاء" />
     </div>
     <details class="card fold" :open="debtsOpen" @toggle="e => (debtsOpen = e.target.open)">
-      <summary><Icon name="chev" class="chev" /><span>الديون على المحل</span><span class="sum num">{{ fmt(debtTotal) }}</span></summary>
+      <summary><Icon name="chev" class="chev" /><span>ديون</span><span class="sum num">{{ fmt(debtTotal) }}</span></summary>
       <ItemTable type="debt" bare />
     </details>
   </div>

@@ -22,6 +22,15 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 - عجز / زيادة تراكمي = the sum of all saved days. On «التصفية»: the total until now, and the total after this day (bold).
 - «العجوزات» (page `/deficits`, one row per saved day, newest first) shows each day with its note. The note IS that day's «ملاحظات اليوم»:
   `POST /api/days/:id/notes` changes only the text (no number, no password; editing device only; logged in op_log).
+- «تعويض» (from «العجوزات»): a known reason for a saved day's عجز / زيادة (e.g. the money was found later on a wallet).
+  The signed amount goes to ONE category TOTAL of that day's summary — المبيعات / المدخلات / المخرجات (→ ربح اليوم →
+  الافتراضية) or المحافظ / العملاء / النقدية / المكن (+) / الديون / الثوابت (−) (→ الحقيقية) — the day's tables are never
+  changed. It flows to every later day like a calendar edit (their تصفية البارحة follows). Password required.
+  `POST /api/days/:id/compensate`; table `compensations`; the day's note is edited with it and only the added part is
+  kept with the compensation. «صفّر الفرق» fills the exact amount (`neutralizing()` in shared/engine.js).
+- `days.orig` = the values the day was CLOSED with. A day changed afterwards (تعويض or calendar edit) shows every changed
+  value crossed out next to the new one and lists its changes (calendar edits dated with the day itself); a day changed
+  only because of an earlier day shows only تصفية البارحة crossed out.
 - Until today's cash or network is typed, the day shows «بانتظار عدّ النقدية» instead of a fake shortage.
 
 ## Database (server/db/schema.js)
@@ -32,6 +41,7 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 | `item_days` | an item's numbers on a day (opening, calculator text, value, ✓, deleted) — this is also its history |
 | `entries` | inputs / outputs / sales |
 | `adjustments` | manual + / − on the real total, with a note |
+| `compensations` | تعويض of a saved day: field, signed amount, the note part (summary totals only) |
 | `day_edits` | every edit of a saved day: note, operations, effect |
 | `op_log` | every change received (accepted or refused), never deleted |
 | `legacy_archive` | the old version's data, untouched |

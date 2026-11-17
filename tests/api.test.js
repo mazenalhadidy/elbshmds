@@ -123,4 +123,47 @@ describe('server', () => {
     expect((await s.call('GET', '/state')).body.book.day.notes).toBe('اليوم');
     s.close();
   });
+
+  it('تعويض: money found later on a wallet neutralizes the shortage; flows to later days; tables untouched; original kept', async () => {
+    const s = await boot();
+    await s.call('POST', '/setup', { opening: 100000 });
+    const closeWith = async (sale, cash, date, notes = '') => {
+      let r = await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 's' + date, kind: 'sale', amount: sale }), op({ t: 'setCash', value: cash }), ...(notes ? [op({ t: 'setNotes', notes })] : [])] });
+      return s.call('POST', '/close', { dayId: r.body.book.day.id, date, password: 'pw' });
+    };
+    await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'w1', type: 'wallet', name: '0100', amount: 100000 })] });
+    await closeWith(5000, 15000, '2026-11-14');                       // زيادة 10,000
+    await closeWith(4000, 8000, '2026-11-15', 'نقص في الدرج');        // عجز 11,000
+    let r = await closeWith(3000, 9000, '2026-11-16');                // عجز 2,000
+    const d15 = r.body.days.find(d => d.date === '2026-11-15'), d16 = r.body.days.find(d => d.date === '2026-11-16');
+    expect([d15.diff, d16.diff, r.body.book.day.opening]).toEqual([11000, 2000, 109000]);
+    expect(d15.orig.diff).toBe(11000); expect(d15.own).toBe(0);
+
+    // password, field and amount are checked
+    expect((await s.call('POST', `/days/${d15.id}/compensate`, { field: 'wallets', amount: 11000, password: 'bad' })).status).toBe(401);
+    expect((await s.call('POST', `/days/${d15.id}/compensate`, { field: 'nope', amount: 1, password: 'pw' })).status).toBe(400);
+    expect((await s.call('POST', `/days/${d15.id}/compensate`, { field: 'wallets', amount: 0, password: 'pw' })).status).toBe(400);
+    expect((await s.call('POST', `/days/${d15.id}/compensate`, { field: 'wallets', amount: 1, password: 'pw' }, 'B')).status).toBe(403);
+
+    r = await s.call('POST', `/days/${d15.id}/compensate`, { field: 'wallets', amount: 11000, notes: 'نقص في الدرج\nوُجد المبلغ على المحفظة 0100', password: 'pw' });
+    expect(r.status).toBe(200);
+    const snap = r.body.snapshot, n15 = snap.days.find(d => d.id === d15.id), n16 = snap.days.find(d => d.id === d16.id);
+    expect(n15.real).toBe(119000); expect(n15.diff).toBe(0);                            // the shortage is neutralized
+    expect(n15.orig.real).toBe(108000); expect(n15.orig.diff).toBe(11000); expect(n15.own).toBe(1);   // the original is kept
+    expect(n16.opening).toBe(119000); expect(n16.orig.opening).toBe(108000);            // flows: next day's تصفية البارحة
+    expect(n16.diff).toBe(13000); expect(n16.own).toBe(0);                              // (the money was never counted on the 16th)
+    expect(snap.book.day.opening).toBe(109000);                                         // the 16th's real total did not change
+    expect(n15.notes).toBe('نقص في الدرج\nوُجد المبلغ على المحفظة 0100');
+    // the day itself: tables as closed, the compensation listed with only the new part of the note
+    const day = (await s.call('GET', '/days/' + d15.id)).body;
+    expect(Object.values(day.book.entries)).toHaveLength(1); expect(day.book.rows.w1.value).toBe(100000);
+    expect(Object.values(day.book.comps)).toEqual([expect.objectContaining({ field: 'wallets', amount: 11000, note: 'وُجد المبلغ على المحفظة 0100' })]);
+    expect(day.summary.wallets).toBe(111000); expect(day.summary.real).toBe(119000);
+    // a sales compensation changes the profit and the theoretical total, nothing after it
+    r = await s.call('POST', `/days/${d16.id}/compensate`, { field: 'sale', amount: -2000, password: 'pw' });
+    const m16 = r.body.snapshot.days.find(d => d.id === d16.id);
+    expect(m16.profit).toBe(1000); expect(m16.diff).toBe(11000); expect(r.body.snapshot.book.day.opening).toBe(109000);
+    expect((await s.local.execute("SELECT COUNT(*) n FROM op_log WHERE op LIKE '%compensate%'")).rows[0].n).toBe(2);
+    s.close();
+  });
 });

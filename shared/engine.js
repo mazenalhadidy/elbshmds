@@ -48,6 +48,7 @@ export function emptyBook(dayId, opening = null, seq = 1) {
     rows: {},      // itemId -> row
     entries: {},   // entryId -> { id, kind, name, amount, createdAt, late? }
     adjs: {},      // adjustmentId -> { id, amount (+ adds, - subtracts), note, createdAt }
+    comps: {},     // compensationId -> { id, field, amount, note, createdAt } (saved days, see COMP_FIELDS)
   };
 }
 
@@ -66,6 +67,7 @@ const text = s => String(s ?? '').trim();
    --------------------------------------------------------------------- */
 export function summarize(book, items) {
   let wallets = 0, clients = 0, debts = 0, constants = 0, input = 0, output = 0, sale = 0, adjustments = 0;
+  const C = compTotals(book.comps);                       // compensations: added to the category totals only
   for (const [id, row] of Object.entries(book.rows)) {
     const it = items[id];
     if (!it || row.status !== 'active') continue;          // deleted items never count
@@ -77,18 +79,53 @@ export function summarize(book, items) {
   }
   for (const e of Object.values(book.entries)) { if (e.kind === 'input') input += e.amount; else if (e.kind === 'output') output += e.amount; else sale += e.amount; }
   for (const a of Object.values(book.adjs)) adjustments += a.amount;
-  const d = book.day;
+  input += C.input; output += C.output; sale += C.sale;
+  wallets += C.wallets; clients += C.clients; debts += C.debts; constants += C.constants;
+  const d = book.day, cash = d.cash + C.cash, network = d.network + C.network;
   const profit = r2(input + sale - output);
   const opening = d.opening == null ? null : r2(d.opening);
   const virtual = opening == null ? null : r2(opening + profit);
-  const real = r2(wallets + clients + d.cash + d.network - debts - constants + adjustments);
+  const real = r2(wallets + clients + cash + network - debts - constants + adjustments);
   const diff = virtual == null ? null : r2(virtual - real);
   return {
     opening, profit, virtual, real, diff,
     input: r2(input), output: r2(output), sale: r2(sale),
     wallets: r2(wallets), clients: r2(clients), debts: r2(debts), constants: r2(constants), adjustments: r2(adjustments),
-    cash: r2(d.cash), network: r2(d.network),
+    cash: r2(cash), network: r2(network),
   };
+}
+
+/* ---------------------------------------------------------------------
+   COMPENSATIONS (تعويض) on a saved day: a known reason for its عجز / زيادة, e.g. money found later on a wallet.
+   The amount is added to ONE category total of the summary (+ more, − less); the day's tables are not changed.
+     المبيعات / المدخلات / المخرجات -> ربح اليوم -> التصفية الافتراضية
+     المحافظ / العملاء / النقدية / المكن (+) and الديون / الثوابت (−) -> التصفية الحقيقية -> تصفية البارحة of the next day
+   --------------------------------------------------------------------- */
+export const COMP_FIELDS = { sale: 'المبيعات', input: 'المدخلات', output: 'المخرجات', wallets: 'المحافظ', clients: 'العملاء', debts: 'الديون', constants: 'الثوابت', network: 'المكن', cash: 'النقدية' };
+export function compTotals(comps) {
+  const C = Object.fromEntries(Object.keys(COMP_FIELDS).map(k => [k, 0]));
+  for (const c of Object.values(comps || {})) if (c.field in C) C[c.field] += Number(c.amount) || 0;
+  return C;
+}
+/** The change a compensation makes to the day's difference (افتراضي − حقيقي). */
+export function compEffect(field, amount) {
+  const a = Number(amount) || 0;
+  if (field === 'sale' || field === 'input') return { virtual: a, real: 0 };
+  if (field === 'output') return { virtual: -a, real: 0 };
+  if (field === 'debts' || field === 'constants') return { virtual: 0, real: -a };
+  return { virtual: 0, real: a };
+}
+/** The signed amount on `field` that makes a difference of `diff` exactly 0 («صفّر الفرق»). */
+export function neutralizing(field, diff) {
+  const e = compEffect(field, 1);                        // effect of +1
+  const per = e.virtual - e.real;                        // change of the difference for +1
+  return r2(-diff / per);
+}
+/** The part of a day's note that a change added (the note before -> after): only what is new is listed with the change. */
+export function notePart(before, after) {
+  const a = String(before || '').trim(), b = String(after || '').trim();
+  if (a === b) return '';
+  return a && b.startsWith(a) ? b.slice(a.length).trim() : b;
 }
 
 /* ---------------------------------------------------------------------

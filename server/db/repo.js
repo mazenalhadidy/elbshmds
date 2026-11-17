@@ -16,8 +16,11 @@ export async function loadItems(db) {
 }
 
 export async function loadDays(db) {
-  return (await db.execute('SELECT id, seq, date, status, opening, profit, virtual_total, real_total, diff, closed_at, notes FROM days ORDER BY seq')).rows
-    .map(r => ({ id: r.id, seq: Number(r.seq), date: r.date, status: r.status, opening: r.opening, profit: r.profit, virtual: r.virtual_total, real: r.real_total, diff: r.diff, closedAt: r.closed_at, notes: r.notes }));
+  // own = how many changes were made ON this day afterwards (compensations + calendar edits): its values are shown crossed out
+  return (await db.execute(`SELECT id, seq, date, status, opening, profit, virtual_total, real_total, diff, closed_at, notes, orig,
+      (SELECT COUNT(*) FROM compensations c WHERE c.day_id = days.id) + (SELECT COUNT(*) FROM day_edits e WHERE e.day_id = days.id) own
+    FROM days ORDER BY seq`)).rows
+    .map(r => ({ id: r.id, seq: Number(r.seq), date: r.date, status: r.status, opening: r.opening, profit: r.profit, virtual: r.virtual_total, real: r.real_total, diff: r.diff, closedAt: r.closed_at, notes: r.notes, orig: parse(r.orig), own: Number(r.own) }));
 }
 
 export async function loadBook(db, dayId) {
@@ -25,8 +28,8 @@ export async function loadBook(db, dayId) {
   if (!d) return null;
   const book = {
     day: { id: d.id, seq: Number(d.seq), date: d.date, status: d.status, opening: d.opening, cash: d.cash, network: d.network,
-      cashChanged: !!d.cash_changed, networkChanged: !!d.network_changed, notes: d.notes, closedAt: d.closed_at },
-    rows: {}, entries: {}, adjs: {},
+      cashChanged: !!d.cash_changed, networkChanged: !!d.network_changed, notes: d.notes, closedAt: d.closed_at, orig: parse(d.orig) },
+    rows: {}, entries: {}, adjs: {}, comps: {},
   };
   for (const r of (await db.execute({ sql: 'SELECT * FROM item_days WHERE day_id=?', args: [dayId] })).rows)
     book.rows[r.item_id] = { opening: r.opening, calc: r.calc, value: r.value, active: !!r.active, status: r.status, changed: !!r.changed, achanged: !!r.achanged, schanged: !!r.schanged };
@@ -34,8 +37,11 @@ export async function loadBook(db, dayId) {
     book.entries[r.id] = { id: r.id, kind: r.kind, name: r.name, amount: r.amount, createdAt: r.created_at, ...(r.late ? { late: r.late } : {}) };
   for (const r of (await db.execute({ sql: 'SELECT * FROM adjustments WHERE day_id=? ORDER BY created_at, id', args: [dayId] })).rows)
     book.adjs[r.id] = { id: r.id, amount: r.amount, note: r.note, createdAt: r.created_at, ...(r.late ? { late: r.late } : {}) };
+  for (const r of (await db.execute({ sql: 'SELECT * FROM compensations WHERE day_id=? ORDER BY created_at, id', args: [dayId] })).rows)
+    book.comps[r.id] = { id: r.id, field: r.field, amount: r.amount, note: r.note, createdAt: r.created_at, device: r.device };
   return book;
 }
+const parse = t => { try { return t ? JSON.parse(t) : null; } catch { return null; } };
 
 /* ---------- writing (inside a transaction `tx`, with the change number `rev`) ---------- */
 async function del(tx, tbl, pkCols, pkVals, rev) {
@@ -59,7 +65,8 @@ export async function saveBook(tx, before, after, sum, rev) {
   const d = after.day, closed = d.status === 'closed';
   const dayRow = { id: d.id, seq: d.seq, date: d.date, status: d.status, opening: d.opening, cash: d.cash, network: d.network,
     cash_changed: b(d.cashChanged), network_changed: b(d.networkChanged), notes: d.notes || '',
-    profit: sum.profit, virtual_total: sum.virtual, real_total: sum.real, diff: sum.diff, closed_at: closed ? d.closedAt : null };
+    profit: sum.profit, virtual_total: sum.virtual, real_total: sum.real, diff: sum.diff, closed_at: closed ? d.closedAt : null,
+    orig: d.orig ? JSON.stringify(d.orig) : null };
   await upsert(tx, 'days', dayRow, rev);
   const B = before || { rows: {}, entries: {}, adjs: {} };
   for (const [id, r] of Object.entries(after.rows))
@@ -71,6 +78,10 @@ export async function saveBook(tx, before, after, sum, rev) {
   for (const [id, a] of Object.entries(after.adjs))
     if (!same(B.adjs[id], a)) await upsert(tx, 'adjustments', { id, day_id: d.id, amount: a.amount, note: a.note, late: a.late || null, created_at: a.createdAt }, rev);
   for (const id of Object.keys(B.adjs)) if (!after.adjs[id]) await del(tx, 'adjustments', ['id'], [id], rev);
+  const BC = B.comps || {};
+  for (const [id, c] of Object.entries(after.comps || {}))
+    if (!same(BC[id], c)) await upsert(tx, 'compensations', { id, day_id: d.id, field: c.field, amount: c.amount, note: c.note || '', device: c.device || null, created_at: c.createdAt }, rev);
+  for (const id of Object.keys(BC)) if (!(after.comps || {})[id]) await del(tx, 'compensations', ['id'], [id], rev);
 }
 
 /* ---------- the change counter ---------- */

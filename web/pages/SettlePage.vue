@@ -40,7 +40,7 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
 </script>
 <template>
   <div class="page narrow stack" v-if="s">
-    <SummaryPanel :s="s" :editable-opening="canEditOpening" :uncounted="uncounted" :cumulative="cum" @edit-opening="openingEdit = s.opening ?? ''">
+    <SummaryPanel :s="s" :editable-opening="canEditOpening" :uncounted="uncounted" :cumulative="cum" :orig="shop.view?.editing ? null : shop.book?.day.orig" @edit-opening="openingEdit = s.opening ?? ''">
       <template #top>
         <div class="top-btn"><RouterLink to="/settle/deficits" class="btn wide deficits-btn" data-test="deficits-btn"><Icon name="list" /> العجوزات</RouterLink></div>
       </template>
@@ -65,7 +65,7 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
 
     <PasswordDialog v-if="asking" title="إنهاء اليوم" confirm-text="إنهاء اليوم وحفظه" :run="close" @close="asking = false">
       <p style="margin-top:0">سيُحفظ اليوم بتاريخ <b>{{ fmtDate(date) }}</b>، وتصبح التصفية الحقيقية <b class="num">{{ fmt(s.real) }}</b> هي «تصفية البارحة» لليوم التالي.</p>
-      <p v-if="uncounted" class="hint warn-hint">⚠️ لم تُكتب النقدية ولا رصيد الشبكة لهذا اليوم، فالتصفية الحقيقية لا تشملهما. اكتبهما في «الإدارة» قبل الإنهاء إن وُجدا.</p>
+      <p v-if="uncounted" class="hint warn-hint">⚠️ لم تُكتب النقدية ولا المكن لهذا اليوم، فالتصفية الحقيقية لا تشملهما. اكتبهما في «الإدارة» قبل الإنهاء إن وُجدا.</p>
       <p v-if="s.diff" class="hint" :class="s.diff > 0 ? 'neg' : 'pos'">يوجد {{ s.diff > 0 ? 'عجز' : 'زيادة' }} {{ fmt(Math.abs(s.diff)) }}</p>
       <p class="hint">بعد الحفظ يمكن تعديله فقط من التقويم مع كتابة السبب وكلمة المرور.</p>
     </PasswordDialog>

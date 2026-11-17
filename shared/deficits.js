@@ -28,7 +28,7 @@ export function deficitRecords(days) {
   let run = 0;
   const list = (days || []).filter(d => d.status !== 'open').sort((a, b) => a.seq - b.seq).map(d => {
     run = r2(run + (Number(d.diff) || 0));
-    return { id: d.id, seq: d.seq, date: d.date, virtual: d.virtual, real: d.real, diff: d.diff == null ? null : r2(d.diff), notes: d.notes || '', runningAfter: run };
+    return { id: d.id, seq: d.seq, date: d.date, virtual: d.virtual, real: d.real, diff: d.diff == null ? null : r2(d.diff), notes: d.notes || '', runningAfter: run, orig: d.orig || null, own: d.own || 0 };
   });
   return list.reverse();
 }

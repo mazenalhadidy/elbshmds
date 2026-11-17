@@ -195,6 +195,14 @@ export const useShop = defineStore('shop', {
       this.adopt(r); this.rebuild();
     },
 
+    /** تعويض of a saved day (needs the shop computer + password). Returns what changed on every day. */
+    async compensate({ dayId, field, amount, notes, password }) {
+      if (!(await this.flush())) throw new Error('لا يمكن الوصول إلى جهاز المحل الآن');
+      const r = await api('POST', `/days/${dayId}/compensate`, { field, amount, notes, password });
+      this.adopt(r.snapshot); this.rebuild();
+      return r;
+    },
+
     /* ---------------- items ---------------- */
     itemHistory: id => api('GET', `/items/${id}/history`),
     async purgeItem(id, password) { await this.flush(); const r = await api('POST', `/items/${id}/purge`, { password }); this.adopt(r); this.rebuild(); },

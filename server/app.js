@@ -106,6 +106,14 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
     return out.snapshot ? { ...out, snapshot: { ...out.snapshot, lock: lock.info(cid(req)) } } : out;
   }));
 
+  // تعويض of a saved day: changes saved numbers (and every later day) -> editing device + password
+  app.post('/api/days/:id/compensate', (req, res) => send(res, async () => {
+    needEditor(req); needPassword(req);
+    const out = await shop.compensate({ dayId: req.params.id, field: req.body?.field, amount: req.body?.amount, notes: req.body?.notes }, cid(req));
+    sync?.poke();
+    return { ...out, snapshot: { ...out.snapshot, lock: lock.info(cid(req)) } };
+  }));
+
   // the note of any day (open or saved): text only, no password (it changes no number), editing device only
   app.post('/api/days/:id/notes', (req, res) => send(res, async () => {
     needEditor(req);

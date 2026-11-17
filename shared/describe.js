@@ -17,7 +17,7 @@ export function describeOp(op, items = {}) {
     case 'delItem': return `حذف ${name(op.id)}`;
     case 'restoreItem': return `استرجاع ${name(op.id)}`;
     case 'setCash': return `النقدية: ${m(op.value)}`;
-    case 'setNetwork': return `رصيد ماكينات الشبكة: ${m(op.value)}`;
+    case 'setNetwork': return `المكن: ${m(op.value)}`;
     case 'setNotes': return 'تعديل الملاحظات';
     case 'setOpening': return `تصفية البارحة: ${m(op.value)}`;
     case 'addAdj': return `${op.amount < 0 || String(op.amount).trim().startsWith('-') ? 'خصم' : 'إضافة'} على التصفية الحقيقية: ${m(op.amount)} — ${op.note || ''}`;

@@ -8,12 +8,12 @@
    the row. The Turso sync sends every row whose rev is newer than the last one sent.
    ===================================================================== */
 
-export const SYNCED_TABLES = ['items', 'days', 'item_days', 'entries', 'adjustments', 'day_edits', 'op_log', 'legacy_archive'];
+export const SYNCED_TABLES = ['items', 'days', 'item_days', 'entries', 'adjustments', 'day_edits', 'op_log', 'legacy_archive', 'compensations'];
 
 // primary key columns of each synced table (used for upserts and deletes)
 export const KEYS = {
   items: ['id'], days: ['id'], item_days: ['day_id', 'item_id'], entries: ['id'], adjustments: ['id'],
-  day_edits: ['id'], op_log: ['op_id'], legacy_archive: ['id'],
+  day_edits: ['id'], op_log: ['op_id'], legacy_archive: ['id'], compensations: ['id'],
 };
 
 export const MIGRATIONS = [
@@ -87,6 +87,19 @@ export const MIGRATIONS = [
       'CREATE INDEX IF NOT EXISTS day_edits_day_created ON day_edits(day_id, created_at)',
       // the op log grows forever: dedupe lookups use the primary key, audits look by time
       'CREATE INDEX IF NOT EXISTS op_log_at ON op_log(at)',
+    ],
+  },
+  {
+    version: 3,
+    name: 'compensations (تعويض) of saved days + the values each day was closed with',
+    sql: [
+      // orig: JSON of the values the day was CLOSED with (open day: its first «تصفية البارحة»). Shown crossed out when changed.
+      'ALTER TABLE days ADD COLUMN orig TEXT',
+      `CREATE TABLE IF NOT EXISTS compensations(
+         id TEXT PRIMARY KEY, day_id TEXT NOT NULL, field TEXT NOT NULL, amount REAL NOT NULL,
+         note TEXT NOT NULL DEFAULT '', device TEXT, created_at TEXT, rev INTEGER NOT NULL DEFAULT 0)`,
+      'CREATE INDEX IF NOT EXISTS compensations_day ON compensations(day_id, created_at)',
+      'CREATE INDEX IF NOT EXISTS compensations_rev ON compensations(rev)',
     ],
   },
 ];

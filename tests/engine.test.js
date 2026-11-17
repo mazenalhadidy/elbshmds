@@ -103,4 +103,17 @@ describe('engine', () => {
     expect(isCashProfit(' ربح الكاش عم محمد')).toBe(true);
     expect(isCashProfit('ربح الكارت')).toBe(false);
   });
+
+  it('compensations: added to one category total; the tables stay; «صفّر الفرق» finds the exact amount', async () => {
+    const { compEffect, neutralizing, notePart, compTotals } = await import('../shared/engine.js');
+    expect(compEffect('wallets', 100)).toEqual({ virtual: 0, real: 100 });
+    expect(compEffect('debts', 100)).toEqual({ virtual: 0, real: -100 });
+    expect(compEffect('sale', 100)).toEqual({ virtual: 100, real: 0 });
+    expect(compEffect('output', 100)).toEqual({ virtual: -100, real: 0 });
+    // diff 11,000 (عجز): +11,000 on wallets, −11,000 on sales, +11,000 on output, −11,000 on debts
+    expect([neutralizing('wallets', 11000), neutralizing('sale', 11000), neutralizing('output', 11000), neutralizing('debts', 11000)]).toEqual([11000, -11000, 11000, -11000]);
+    expect(neutralizing('cash', -500)).toBe(-500);                                        // زيادة 500: less cash
+    expect(notePart('قديمة', 'قديمة\nجديدة')).toBe('جديدة'); expect(notePart('قديمة', 'قديمة')).toBe(''); expect(notePart('أ', 'ب')).toBe('ب');
+    expect(compTotals({ a: { field: 'cash', amount: 5 }, b: { field: 'cash', amount: -2 }, c: { field: 'x', amount: 9 } }).cash).toBe(3);
+  });
 });

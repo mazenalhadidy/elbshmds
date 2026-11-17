@@ -5,7 +5,7 @@
    and answers questions (history, calendar, ربح الكاش ...).
    ===================================================================== */
 import crypto from 'node:crypto';
-import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError } from '../../shared/engine.js';
+import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart } from '../../shared/engine.js';
 import { describeOp } from '../../shared/describe.js';
 import { loadItems, loadDays, loadBook, saveItems, saveBook, nextRev, upsert, getMeta } from '../db/repo.js';
 
@@ -59,6 +59,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       if (open) throw new UserError('تم الإعداد بالفعل');
       const book = emptyBook(uid(), null, 1);
       reduce({ items, book }, { t: 'setOpening', value: opening });
+      book.day.orig = { opening: book.day.opening };
       await write((tx, r) => saveBook(tx, null, book, summarize(book, items), r));
       open = book; await refreshDays();
       return snapshot();
@@ -101,7 +102,9 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       if (notes !== undefined) closed.day.notes = String(notes);
       closed.day.date = date; closed.day.status = 'closed'; closed.day.closedAt = now().toISOString();
       const sum = summarize(closed, items);
+      closed.day.orig = sum;                                           // the values it was closed with (crossed out if changed later)
       const next = nextBook(closed, items, uid());                     // next day: تصفية البارحة = this day's REAL total
+      next.day.orig = { opening: next.day.opening };
       await write(async (tx, r) => {
         await saveBook(tx, open, closed, sum, r);
         await saveBook(tx, null, next, summarize(next, items), r);
@@ -136,19 +139,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       const fixed = ops.map(o => (o.t === 'setOpening' && target.day.seq === 1 ? { ...o, force: true } : o));
       const { rejected } = applyAll(st, fixed.map(o => ({ ...o, dayId: undefined })));
       if (rejected.length) throw new UserError('تعديل غير صالح: ' + rejected[0].error);
-      // cascade: every later day, in the order they were worked
-      const later = days.filter(d => d.seq > target.day.seq);
-      const books = [{ before: target, after: st.book }];
-      let prev = st.book;
-      for (const d of later) {
-        const before = d.id === open?.day.id ? open : await loadBook(db, d.id);
-        const after = carry(prev, st.items, clone(before));
-        books.push({ before, after }); prev = after;
-      }
-      const changes = books.map(({ before, after }) => {
-        const a = summarize(before, items), z = summarize(after, st.items);
-        return { dayId: after.day.id, date: after.day.date, open: after.day.status === 'open', before: { opening: a.opening, real: a.real, virtual: a.virtual, diff: a.diff }, after: { opening: z.opening, real: z.real, virtual: z.virtual, diff: z.diff } };
-      });
+      const { books, changes } = await cascade(target, st);
       const described = ops.map(o => describeOp(o, st.items));
       if (preview) return { changes, described };
       await write(async (tx, r) => {
@@ -162,6 +153,56 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       if (open && last.day.id === open.day.id) open = last;
       await refreshDays();
       return { changes, described, snapshot: snapshot() };
+    });
+  }
+
+  /**
+   * A saved day changed (calendar edit or compensation): let it flow to every later day and the open day,
+   * in the order they were worked — each later day's تصفية البارحة = the previous day's (new) real total.
+   */
+  async function cascade(target, st) {
+    const later = days.filter(d => d.seq > target.day.seq);
+    const books = [{ before: target, after: st.book }];
+    let prev = st.book;
+    for (const d of later) {
+      const before = d.id === open?.day.id ? open : await loadBook(db, d.id);
+      const after = carry(prev, st.items, clone(before));
+      books.push({ before, after }); prev = after;
+    }
+    const changes = books.map(({ before, after }) => {
+      const a = summarize(before, items), z = summarize(after, st.items);
+      return { dayId: after.day.id, date: after.day.date, open: after.day.status === 'open', before: { opening: a.opening, real: a.real, virtual: a.virtual, diff: a.diff }, after: { opening: z.opening, real: z.real, virtual: z.virtual, diff: z.diff } };
+    });
+    return { books, changes };
+  }
+
+  /**
+   * تعويض: a known reason for a saved day's عجز / زيادة. `amount` (signed) is added to ONE category total of that
+   * day's summary (the tables stay as they were closed) and flows to every later day like a calendar edit.
+   * `notes` = the day's whole note after editing; the part that was added is kept with the compensation.
+   */
+  async function compensate({ dayId, field, amount, notes }, device) {
+    return serial(async () => {
+      const target = await loadBook(db, dayId);
+      if (!target || target.day.status !== 'closed') throw new UserError('هذا اليوم غير محفوظ');
+      if (!COMP_FIELDS[field]) throw new UserError('اختر ما يُضاف إليه المبلغ');
+      const value = Math.round(Number(amount) * 100) / 100;
+      if (!Number.isFinite(value) || !value || Math.abs(value) > 1e12) throw new UserError('اكتب المبلغ');
+      const text = notes === undefined ? target.day.notes || '' : String(notes);
+      if (text.length > 5000) throw new UserError('الملاحظة طويلة جدًا');
+      const st = { items: clone(items), book: clone(target) };
+      const id = uid();
+      st.book.comps = { ...(st.book.comps || {}), [id]: { id, field, amount: value, note: notePart(target.day.notes, text), createdAt: now().toISOString(), device: device || null } };
+      st.book.day.notes = text;
+      const { books, changes } = await cascade(target, st);
+      await write(async (tx, r) => {
+        for (const { before, after } of books) await saveBook(tx, before, after, summarize(after, st.items), r);
+        await logOps(tx, r, [{ opId: 'comp-' + id, t: 'compensate', dayId, field, amount: value }], device, [], []);
+      });
+      const last = books[books.length - 1].after;
+      if (open && last.day.id === open.day.id) open = last;
+      await refreshDays();
+      return { changes, snapshot: snapshot() };
     });
   }
 
@@ -221,7 +262,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
   /** Everything, as one JSON file (backup / download). */
   async function exportAll() {
     const out = { exportedAt: now().toISOString(), rev, tables: {} };
-    for (const t of ['items', 'days', 'item_days', 'entries', 'adjustments', 'day_edits']) out.tables[t] = (await db.execute(`SELECT * FROM ${t}`)).rows;
+    for (const t of ['items', 'days', 'item_days', 'entries', 'adjustments', 'compensations', 'day_edits']) out.tables[t] = (await db.execute(`SELECT * FROM ${t}`)).rows;
     return out;
   }
 
@@ -232,7 +273,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
   }
 
   return {
-    snapshot, setup, applyOps, closeDay, getDay, editDay, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
+    snapshot, setup, applyOps, closeDay, getDay, editDay, compensate, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
     get rev() { return rev; }, get openDayId() { return open?.day.id; },
   };
 }

@@ -104,11 +104,19 @@ describe('screens', () => {
     expect(w.findAll('[data-test=def-rec]')).toHaveLength(1);                         // one row per saved day
     const rec = w.find('[data-test=def-rec]');
     expect(rec.findAll('td')).toHaveLength(5); expect(rec.text()).toContain('مطابق');
-    await rec.find('.note-btn').trigger('click'); await flushPromises();
-    const ta = w.find('.note-row textarea'); await ta.setValue('ملاحظة من العجوزات');
-    await w.findAll('.note-row button').find(b => b.text() === 'إغلاق').trigger('click');
-    await until(() => shop.snap.days[0].notes === 'ملاحظة من العجوزات', 'note saved');
-    expect(document.body.textContent).toContain('تم حفظ الملاحظة');
+    // تعويض: +100 on المخرجات (profit −100 -> زيادة 100), the reason written in the day's note, password
+    await rec.find('[data-test=comp-btn]').trigger('click'); await flushPromises();
+    const sel = document.querySelector('[data-test=comp-field]'); sel.value = 'output'; sel.dispatchEvent(new Event('change')); await nextTick();
+    const ca = document.getElementById('ca'); ca.value = '100'; ca.dispatchEvent(new Event('input')); await nextTick();
+    const cn = document.getElementById('cn'); cn.value = 'فاتورة كهرباء نسيناها'; cn.dispatchEvent(new Event('input'));
+    const cp = document.getElementById('cp'); cp.value = 'pw'; cp.dispatchEvent(new Event('input')); await nextTick();
+    expect(document.querySelector('[data-test=comp-preview]').textContent).toContain('زيادة');
+    document.querySelector('[data-test=comp-save]').click();
+    await until(() => shop.snap.days[0].diff === -100, 'compensated');
+    expect(shop.snap.days[0].own).toBe(1); expect(shop.snap.days[0].notes).toBe('فاتورة كهرباء نسيناها');
+    expect(document.body.textContent).toContain('تم حفظ التعويض');
+    await flushPromises();
+    expect(w.find('[data-test=def-rec] s').exists()).toBe(true);                       // the original is crossed out
     await router.push('/settle'); await flushPromises();
 
     // OFFLINE: changes appear at once, wait, then arrive

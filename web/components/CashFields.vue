@@ -1,4 +1,4 @@
-<!-- النقدية و رصيد ماكينات الشبكة (typed; saved as you type; counted in التصفية الحقيقية) -->
+<!-- النقدية و المكن (typed; saved as you type; counted in التصفية الحقيقية) -->
 <script setup>
 import { ref, watch } from 'vue';
 import { useShop } from '@/stores/shop.js';
@@ -19,10 +19,10 @@ const done = label => { if (typed) { toasts.show('تم حفظ ' + label); typed 
 </script>
 <template>
   <section class="card">
-    <div class="card-h"><h2>النقدية والشبكة</h2></div>
+    <div class="card-h"><h2>النقدية والمكن</h2></div>
     <div class="card-b grid2">
       <div><label class="label" for="cash">النقدية الموجودة في المحل</label><MoneyInput id="cash" v-model="cash" :disabled="!shop.canEdit" @update:model-value="v => save('setCash', v)" @blur="done('النقدية')" /></div>
-      <div><label class="label" for="net">رصيد ماكينات الشبكة</label><MoneyInput id="net" v-model="net" :disabled="!shop.canEdit" @update:model-value="v => save('setNetwork', v)" @blur="done('رصيد الشبكة')" /></div>
+      <div><label class="label" for="net">المكن</label><MoneyInput id="net" v-model="net" :disabled="!shop.canEdit" @update:model-value="v => save('setNetwork', v)" @blur="done('المكن')" /></div>
     </div>
   </section>
 </template>
