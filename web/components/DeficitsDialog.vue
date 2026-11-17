@@ -17,6 +17,11 @@ const emit = defineEmits(['close']);
 const shop = useShop(), toasts = useToasts();
 const records = computed(() => deficitRecords(shop.snap?.days));
 const total = computed(() => cumulative(shop.snap?.days));
+// Arabic counting: يوم واحد / يومان / ٣–١٠ أيام / ١١+ يومًا
+const daysText = computed(() => {
+  const n = records.value.length, d = toArabicDigits(n);
+  return n === 1 ? 'يوم واحد محفوظ' : n === 2 ? 'يومان محفوظان' : n >= 3 && n <= 10 ? `${d} أيام محفوظة` : `${d} يومًا محفوظًا`;
+});
 const tone = d => ({ deficit: 'neg', surplus: 'pos' })[diffKind(d)] || '';
 
 /* ----- the note of one day: open -> edit -> close = saved ----- */
@@ -78,7 +83,7 @@ async function close() { if (await closeNote()) emit('close'); }
         <p v-else-if="r.notes" class="note-preview small">{{ r.notes }}</p>
       </li>
     </ul>
-    <p class="hint">{{ toArabicDigits(records.length) }} يومًا محفوظًا · الرقم الملوّن: الأحمر عجز والأخضر زيادة.</p>
+    <p class="hint">{{ daysText }} · الرقم الملوّن: الأحمر عجز والأخضر زيادة.</p>
   </Modal>
 </template>
 <style scoped>
