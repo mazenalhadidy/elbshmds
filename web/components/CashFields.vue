@@ -10,7 +10,11 @@ const shop = useShop();
 const cash = ref(shop.book?.day.cash || ''), net = ref(shop.book?.day.network || '');
 watch(() => shop.book?.day.cash, v => { if (document.activeElement?.id !== 'cash') cash.value = v || ''; });
 watch(() => shop.book?.day.network, v => { if (document.activeElement?.id !== 'net') net.value = v || ''; });
-const save = (t, v) => { if (v !== '' && v !== (t === 'setCash' ? shop.book.day.cash : shop.book.day.network) && shop.dispatch({ t, value: v }, { quiet: true })) typed = true; };
+// typing the same value still counts the first time (a real 0 means "counted: nothing"), so the gap can show
+const save = (t, v) => {
+  const d = shop.book.day, cur = t === 'setCash' ? d.cash : d.network, counted = t === 'setCash' ? d.cashChanged : d.networkChanged;
+  if (v !== '' && (v !== cur || !counted) && shop.dispatch({ t, value: v }, { quiet: true })) typed = true;
+};
 const done = label => { if (typed) { toasts.show('تم حفظ ' + label); typed = false; } };
 </script>
 <template>

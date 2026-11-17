@@ -7,11 +7,13 @@
 <script setup>
 import { ref, computed } from 'vue';
 import { fmt } from '@shared/money.js';
-const props = defineProps({ s: Object, editableOpening: Boolean });
+// uncounted: today's cash and network were not typed yet -> the gap would only be yesterday's cash, not a real shortage
+const props = defineProps({ s: Object, editableOpening: Boolean, uncounted: Boolean });
 const emit = defineEmits(['edit-opening']);
 const open = ref(false);
-const diffLabel = computed(() => (props.s.diff == null ? '—' : props.s.diff > 0 ? 'عجز' : props.s.diff < 0 ? 'زيادة' : 'مطابق'));
-const diffTone = computed(() => (props.s.diff > 0 ? 'neg' : props.s.diff < 0 ? 'pos' : ''));
+const waiting = computed(() => props.uncounted && !!props.s.diff);
+const diffLabel = computed(() => (waiting.value ? 'بانتظار عدّ النقدية' : props.s.diff == null ? '—' : props.s.diff > 0 ? 'عجز' : props.s.diff < 0 ? 'زيادة' : 'مطابق'));
+const diffTone = computed(() => (waiting.value ? 'wait' : props.s.diff > 0 ? 'neg' : props.s.diff < 0 ? 'pos' : ''));
 </script>
 <template>
   <section class="card summary">
@@ -39,9 +41,10 @@ const diffTone = computed(() => (props.s.diff > 0 ? 'neg' : props.s.diff < 0 ? '
       <div v-if="s.adjustments" class="between"><span>إضافة / خصم يدوي</span><span class="num">{{ s.adjustments > 0 ? '+' : '−' }} {{ fmt(Math.abs(s.adjustments)) }}</span></div>
     </div>
     <div class="line result" :class="diffTone">
-      <span>العجز / الزيادة <span class="small muted">(الافتراضي − الحقيقي)</span></span>
-      <b class="num">{{ diffLabel + (s.diff ? ' ' + fmt(Math.abs(s.diff)) : '') }}</b>
+      <span class="diff-label">العجز / الزيادة <span class="small muted hint-nowrap">(الافتراضي − الحقيقي)</span></span>
+      <b class="num">{{ diffLabel + (s.diff && !waiting ? ' ' + fmt(Math.abs(s.diff)) : '') }}</b>
     </div>
+    <p v-if="waiting" class="wait-note small">لم تُكتب النقدية ولا رصيد الشبكة لهذا اليوم بعد. اكتبهما في «الإدارة» ليظهر العجز أو الزيادة الحقيقي.</p>
   </section>
 </template>
 <style scoped>
@@ -52,6 +55,11 @@ const diffTone = computed(() => (props.s.diff > 0 ? 'neg' : props.s.diff < 0 ? '
 .gap { height: 14px; background: var(--bg); border-block: 1px solid var(--line); }
 .parts { margin: 0 18px 8px; padding: 8px 12px; background: var(--surface-2); border-radius: 8px; color: var(--muted); display: grid; gap: 2px; }
 .result b { font-size: 20px; } .result.neg { background: var(--neg-soft); } .result.pos { background: var(--pos-soft); }
-.result.neg b { color: var(--neg); } .result.pos b { color: var(--pos); }
+.result.neg b { color: var(--neg); }
+.result.wait b { color: var(--muted); font-size: 16px; }
+.wait-note { margin: 0; padding: 0 18px 10px; color: var(--muted); } .result.pos b { color: var(--pos); }
+/* the hint never breaks inside its brackets; on a phone it moves under the label */
+.hint-nowrap { white-space: nowrap; }
+@media (max-width: 480px) { .diff-label .hint-nowrap { display: block; } }
 .link { border: 0; background: none; color: var(--brand); cursor: pointer; padding: 0 6px; }
 </style>

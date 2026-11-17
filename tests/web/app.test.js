@@ -77,11 +77,14 @@ describe('screens', () => {
     // live التصفية: virtual = 2,420,000 + 650 ; real = 9000 + 11218
     await router.push('/settle'); await flushPromises();
     expect(shop.summary.virtual).toBe(2420650); expect(shop.summary.real).toBe(20218);
-    expect(w.text()).toContain('عجز');
+    expect(w.text()).toContain('بانتظار عدّ النقدية');                                 // no cash typed yet: not shown as a shortage
+    expect(w.find('.result').classes()).toContain('wait');
     // cash typed in الإدارة changes it immediately
     await router.push('/manage'); await flushPromises();
     await type(w.find('#cash'), '2400432'); await flushPromises();
     expect(shop.summary.diff).toBe(0);
+    await router.push('/settle'); await flushPromises();
+    expect(w.text()).toContain('مطابق'); expect(w.text()).not.toContain('بانتظار عدّ النقدية');
     await until(() => !shop.pending.length, 'synced');
 
     // close the day (password) -> next day starts from the REAL total
