@@ -58,7 +58,7 @@ export function calcTerms(text) {
   const terms = [];
   for (const raw of String(text ?? '').split('\n')) {
     const line = cleanNumberText(raw);               // also removes spaces
-    if (!line) continue;
+    if (!line || line === '+' || line === '-') continue;   // a sign typed before its number counts as nothing
     // a line may hold one or more terms: "+5", "-5", "5", "5+3-2"
     const re = /([+-]?)(\d+(?:\.\d+)?|\.\d+)/g;
     if (line.replace(re, '') !== '') return null;    // something that is not a number or a sign

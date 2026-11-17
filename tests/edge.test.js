@@ -21,8 +21,8 @@ describe('edge cases', () => {
   it('days saved before this version get their original values (so a تعويض on them is crossed out)', async () => {
     const s = await boot();
     await s.call('POST', '/setup', { opening: 1000 });
-    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e', kind: 'sale', amount: 300 })] });
-    r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: r.body.today, password: 'pw' });
+    const r = await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e', kind: 'sale', amount: 300 })] });
+    await s.call('POST', '/close', { dayId: r.body.book.day.id, date: r.body.today, password: 'pw' });
     // simulate an old database: no originals stored, back to schema version 3
     await s.local.execute('UPDATE days SET orig = NULL');
     await s.local.execute("UPDATE meta SET value='3' WHERE key='schema_version'");

@@ -51,6 +51,8 @@ describe('old data, Turso copy, new computer', () => {
     // the saved day keeps its old numbers (diff sign is now virtual - real)
     expect(st.days).toHaveLength(1);
     expect(st.days[0]).toMatchObject({ date: '2026-11-10', opening: 2420000, real: 2420300, virtual: 2420250, diff: -50 });
+    expect(st.days[0].orig).toMatchObject({ real: 2420300, diff: -50 });                // a تعويض on an imported day is crossed out too
+    expect(st.book.day.orig).toEqual({ opening: 2420300 });
     const day = (await s.call('GET', '/days/' + st.days[0].id)).body;
     expect(day.book.rows.c_c1.value).toBe(1500); expect(Object.values(day.book.entries)[0].name).toBe('هاتف');
     // the old data is also kept untouched

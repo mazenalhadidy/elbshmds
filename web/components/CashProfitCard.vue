@@ -15,10 +15,8 @@ const run = async pw => { try { return await shop.cashProfit(pw); } catch (e) { 
       <button v-if="!result" class="btn sm" @click="ask = true"><Icon name="lock" :size="16" /> إظهار</button>
       <button v-else class="btn sm" @click="result = null">إخفاء</button>
     </div>
-    <div class="card-b">
-      <template v-if="result">
-        <div class="between"><span class="muted small">من {{ fmtDate(result.from) }} — {{ toArabicDigits(result.count) }} سجل</span><b class="num" style="font-size:22px">{{ fmt(result.total) }}</b></div>
-      </template>
+    <div v-if="result" class="card-b">
+      <div class="between"><span class="muted small">من {{ fmtDate(result.from) }} — {{ toArabicDigits(result.count) }} سجل</span><b class="num" style="font-size:22px">{{ fmt(result.total) }}</b></div>
     </div>
     <PasswordDialog v-if="ask" title="ربح الكاش من أول الشهر" confirm-text="إظهار" :run="run" @close="ask = false" @done="r => (result = r)" />
   </section>

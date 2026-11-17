@@ -116,4 +116,26 @@ describe('engine', () => {
     expect(notePart('قديمة', 'قديمة\nجديدة')).toBe('جديدة'); expect(notePart('قديمة', 'قديمة')).toBe(''); expect(notePart('أ', 'ب')).toBe('ب');
     expect(compTotals({ a: { field: 'cash', amount: 5 }, b: { field: 'cash', amount: -2 }, c: { field: 'x', amount: 9 } }).cash).toBe(3);
   });
+
+  it('review: a sign line with no number yet counts as nothing (the calculator is not "invalid" after pressing +)', async () => {
+    const { evalCalc } = await import('../shared/money.js');
+    expect(evalCalc('746\n+')).toBe(746);
+    expect(evalCalc('٧٤٦\n−')).toBe(746);
+    expect(evalCalc('-')).toBe(0);
+    expect(evalCalc('746\n+x')).toBeNaN();                                             // real garbage is still refused
+  });
+
+  it('review: renaming or restoring cannot create two active items with the same name', async () => {
+    const { reduce, emptyBook } = await import('../shared/engine.js');
+    const st = { items: {}, book: emptyBook('d', 0) };
+    reduce(st, { t: 'addItem', id: 'a', type: 'wallet', name: '0100', amount: 1 });
+    reduce(st, { t: 'addItem', id: 'b', type: 'wallet', name: '0111', amount: 1 });
+    expect(() => reduce(st, { t: 'renameItem', id: 'b', name: '٠١٠٠' })).toThrow('موجود');
+    reduce(st, { t: 'renameItem', id: 'b', name: '0111' });                               // its own name is fine
+    reduce(st, { t: 'delItem', id: 'a' });
+    reduce(st, { t: 'addItem', id: 'c', type: 'wallet', name: '0100', amount: 1 });      // the name is free again
+    expect(() => reduce(st, { t: 'restoreItem', id: 'a' })).toThrow('موجود');
+    // a client and a wallet may share a name (different tables)
+    reduce(st, { t: 'addItem', id: 'k', type: 'client', name: '0111', amount: 0 });
+  });
 });

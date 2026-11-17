@@ -173,6 +173,11 @@ export function reduce(state, op) {
   const row = id => book.rows[id] || fail('غير موجود في هذا اليوم');
   const item = id => (items[id] && !items[id].purged ? items[id] : fail('غير موجود'));
   const ts = op.ts || new Date().toISOString();
+  // two ACTIVE wallets (or clients, or debts) with the same name/number would be impossible to tell apart
+  const noDuplicate = (type, name, except) => {
+    const same = Object.entries(items).find(([id, it]) => id !== except && it.type === type && !it.purged && it.name === name && book.rows[id]?.status === 'active');
+    if (same) fail(type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل');
+  };
 
   switch (op.t) {
     /* ----- input / output / sale ----- */
@@ -197,10 +202,7 @@ export function reduce(state, op) {
       const name = op.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);   // wallet numbers are stored with 0-9
       if (!name && op.type !== 'constant') fail(op.type === 'wallet' ? 'اكتب رقم المحفظة' : 'اكتب الاسم');
       const amount = op.type === 'constant' ? positive(op.amount) : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
-      if (op.type !== 'constant') {
-        const same = Object.entries(items).find(([id, it]) => it.type === op.type && !it.purged && it.name === name && book.rows[id] && book.rows[id].status === 'active');
-        if (same) fail(op.type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل');
-      }
+      if (op.type !== 'constant') noDuplicate(op.type, name);
       items[op.id] = { id: op.id, type: op.type, name: name || ITEM_TYPES.constant, purged: false, createdAt: ts };
       book.rows[op.id] = hasCalc(op.type)
         ? { opening: amount, calc: '', value: amount, active: false, status: 'active', changed: true, achanged: false, schanged: true }
@@ -210,6 +212,7 @@ export function reduce(state, op) {
     case 'renameItem': {
       const it = item(op.id), name = it.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);
       if (!name) fail('اكتب الاسم');
+      if (it.type !== 'constant' && book.rows[op.id]?.status === 'active') noDuplicate(it.type, name, op.id);
       it.name = name; return;
     }
     case 'setValue': {                                                  // wallet balance / constant amount, typed by hand
@@ -228,7 +231,7 @@ export function reduce(state, op) {
       r.calc = calc; r.value = rowFinal(r, it.type); return;
     }
     case 'delItem': { item(op.id); const r = row(op.id); r.status = 'deleted'; r.schanged = true; return; }   // stays visible (struck), keeps its history
-    case 'restoreItem': { item(op.id); const r = row(op.id); r.status = 'active'; r.schanged = true; return; }
+    case 'restoreItem': { const it = item(op.id), r = row(op.id); if (it.type !== 'constant') noDuplicate(it.type, it.name, op.id); r.status = 'active'; r.schanged = true; return; }
 
     /* ----- the day ----- */
     case 'setCash': lateRefuse(); d.cash = amountOf(op.value); d.cashChanged = true; return;

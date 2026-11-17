@@ -9,7 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createClient } from '@libsql/client';
-import { migrate, LOCAL_PRAGMAS } from '../db/schema.js';
+import { migrate, backfillOriginals, LOCAL_PRAGMAS } from '../db/schema.js';
 import { readLegacy, importLegacy } from './legacy.js';
 import { restoreFromRemote } from '../sync/turso.js';
 import { backupNow } from '../services/backups.js';
@@ -43,6 +43,11 @@ export function tuned(client) {
 }
 
 export async function fillIfEmpty(local, remote, cfg, log = console) {
+  const how = await fill(local, remote, cfg, log);
+  await backfillOriginals(local);
+  return how;
+}
+async function fill(local, remote, cfg, log) {
   const n = Number((await local.execute('SELECT COUNT(*) n FROM days')).rows[0].n);
   if (n) return 'existing';
   if (remote) {

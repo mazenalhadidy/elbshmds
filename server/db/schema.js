@@ -122,6 +122,16 @@ export const LOCAL_PRAGMAS = [
   'PRAGMA temp_store=MEMORY',
 ];
 
+/**
+ * Days without their originals (imported from the old version, or restored from an older Turso copy AFTER the
+ * migrations ran): what they show now is the best record of how they were closed. Safe to run at every start.
+ */
+export async function backfillOriginals(db) {
+  await db.execute(`UPDATE days SET orig = json_object('opening', opening, 'profit', profit, 'virtual', virtual_total, 'real', real_total, 'diff', diff)
+    WHERE orig IS NULL AND status = 'closed'`);
+  await db.execute("UPDATE days SET orig = json_object('opening', opening) WHERE orig IS NULL AND status = 'open'");
+}
+
 /** Run the migrations that have not run yet. `meta` remembers the version. */
 export async function migrate(db, { remote = false } = {}) {
   await db.execute('CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)');
