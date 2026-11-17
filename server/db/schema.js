@@ -102,6 +102,16 @@ export const MIGRATIONS = [
       'CREATE INDEX IF NOT EXISTS compensations_rev ON compensations(rev)',
     ],
   },
+  {
+    version: 4,
+    name: 'originals for days saved before compensations existed',
+    sql: [
+      // the best record of how an older day was closed is what it shows now
+      `UPDATE days SET orig = json_object('opening', opening, 'profit', profit, 'virtual', virtual_total, 'real', real_total, 'diff', diff)
+         WHERE orig IS NULL AND status = 'closed'`,
+      "UPDATE days SET orig = json_object('opening', opening) WHERE orig IS NULL AND status = 'open'",
+    ],
+  },
 ];
 
 /** Connection settings for the LOCAL file (Turso manages its own). WAL = readers never wait for the writer. */

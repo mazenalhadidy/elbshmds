@@ -11,7 +11,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:quick": "vitest run tests/money.test.js tests/engine.test.js tests/api.test.js tests/legacy.test.js tests/scale.test.js tests/deficits.test.js",
+    "test:quick": "vitest run tests/money.test.js tests/engine.test.js tests/api.test.js tests/legacy.test.js tests/scale.test.js tests/deficits.test.js tests/edge.test.js",
     "test:ai": "npm --prefix ai-tool test",
     "check": "npm run lint && npm run build && npm test"
   },

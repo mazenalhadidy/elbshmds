@@ -86,7 +86,10 @@ export async function restoreFromRemote(local, remote) {
   if (!has.rows.length) return false;
   if (!Number((await remote.execute('SELECT COUNT(*) n FROM days')).rows[0].n)) return false;
   let maxRev = 0;
+  // an online copy made by an older version may not have the newest tables yet: skip those
+  const remoteTables = new Set((await remote.execute("SELECT name FROM sqlite_master WHERE type='table'")).rows.map(r => r.name));
   for (const t of SYNCED_TABLES) {
+    if (!remoteTables.has(t)) continue;
     let stmts = [];
     for await (const row of pages(remote, `SELECT rowid AS _rid, * FROM ${t}`, [])) {
       const cols = Object.keys(row).filter(k => k !== '_rid' && isNaN(Number(k)));

@@ -236,7 +236,9 @@ export function reduce(state, op) {
     case 'setNotes': lateRefuse(); d.notes = String(op.notes ?? ''); return;
     case 'setOpening': {                                                // only for the very first day (or in past-day edit, by the server)
       if (!op.force && d.seq !== 1) fail('تصفية البارحة تأتي من اليوم السابق');
-      d.opening = amountOf(op.value); return;
+      d.opening = amountOf(op.value);
+      if (!op.force && d.orig) d.orig = { ...d.orig, opening: d.opening };   // the first day's own setting: never shown crossed out
+      return;
     }
     case 'addAdj': {                                                    // manual + / − on the real total, with a note
       if (!op.id) fail('بيانات غير صحيحة');
