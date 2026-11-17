@@ -55,8 +55,8 @@ const dayName = c => (c.open ? 'اليوم الحالي' : fmtDate(c.date));
           </tbody>
         </table>
       </div>
-      <label class="label" for="enote" style="margin-top:14px">سبب التعديل (مطلوب) — يُحفظ مع هذا اليوم</label>
-      <textarea id="enote" v-model="note" class="input" placeholder="مثال: نسيت تسجيل بيع هاتف يوم ..."></textarea>
+      <label class="label" for="enote" style="margin-top:14px">سبب التعديل</label>
+      <textarea id="enote" v-model="note" class="input" ></textarea>
       <label class="label" for="epw" style="margin-top:10px">كلمة المرور</label>
       <input id="epw" v-model="pw" class="input" type="password" autocomplete="current-password" @keydown.enter.prevent="save" />
     </template>

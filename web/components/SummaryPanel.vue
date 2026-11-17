@@ -81,7 +81,6 @@ const was = key => {
       <b v-if="waiting" class="num">بانتظار عدّ النقدية</b>
       <span v-else class="row"><s v-if="was('diff') != null" class="old num">{{ dayWord(was('diff')) }} {{ fmt(Math.abs(was('diff'))) }}</s><b class="num">{{ s.diff == null ? '—' : fmt(Math.abs(s.diff)) }}</b></span>
     </div>
-    <p v-if="waiting" class="wait-note small">لم تُكتب النقدية ولا المكن لهذا اليوم بعد. اكتبهما في «الإدارة» ليظهر العجز أو الزيادة الحقيقي.</p>
 
     <!-- the running total: only the word and the number are coloured -->
     <template v-if="cumulative != null">
@@ -115,7 +114,6 @@ const was = key => {
 .result.neg b { color: var(--neg); } .result.pos b { color: var(--pos); }
 .result.wait b { color: var(--muted); font-size: 16px; }
 .old { color: var(--faint); font-size: 14px; font-weight: 400; }
-.wait-note { margin: 0; padding: 0 18px 10px; color: var(--muted); }
 /* «التفاصيل»: a small arrow that turns when open */
 .more { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: var(--brand-soft); color: var(--brand); cursor: pointer; transition: transform .2s, background .15s; }
 .more:hover { background: #e7defa; }

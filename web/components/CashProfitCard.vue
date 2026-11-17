@@ -19,7 +19,6 @@ const run = async pw => { try { return await shop.cashProfit(pw); } catch (e) { 
       <template v-if="result">
         <div class="between"><span class="muted small">من {{ fmtDate(result.from) }} — {{ toArabicDigits(result.count) }} سجل</span><b class="num" style="font-size:22px">{{ fmt(result.total) }}</b></div>
       </template>
-      <p v-else class="muted small" style="margin:0">مجموع المدخلات التي يبدأ اسمها بـ «ربح كاش» أو «ربح الكاش» منذ أول الشهر. مخفي حتى تكتب كلمة المرور.</p>
     </div>
     <PasswordDialog v-if="ask" title="ربح الكاش من أول الشهر" confirm-text="إظهار" :run="run" @close="ask = false" @done="r => (result = r)" />
   </section>

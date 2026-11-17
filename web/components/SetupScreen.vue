@@ -15,7 +15,7 @@ async function go() {
 <template>
   <div class="card center">
     <h1>أول تشغيل</h1>
-    <p class="muted">اكتب التصفية التي تبدأ منها. ستكون «تصفية البارحة» لأول يوم.</p>
+    <p class="muted">تصفية البارحة لأول يوم</p>
     <MoneyInput v-model="v" placeholder="المبلغ" @enter="go" />
     <p v-if="err" class="hint neg">{{ err }}</p>
     <button class="btn primary wide" style="margin-top:14px" :disabled="busy" @click="go">ابدأ</button>

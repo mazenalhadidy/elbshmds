@@ -51,7 +51,7 @@ function onResultKey(e) { if (e.key === 'Enter') { e.preventDefault(); save(); }
 
     <!-- the lines -->
     <textarea v-show="!showResult" ref="area" v-model="text" class="input lines" dir="ltr" rows="5" spellcheck="false"
-              :readonly="readonly" placeholder="٧٤٦  ثم + أو −" aria-label="الحساب" @keydown="onKey" @input="onInput"></textarea>
+              :readonly="readonly" aria-label="الحساب" @keydown="onKey" @input="onInput"></textarea>
     <!-- only the result (after = ) -->
     <button v-show="showResult" ref="resBtn" class="result-only" :disabled="readonly" title="اضغط لتكملة الحساب" @click="edit" @keydown="onResultKey">
       <span class="small muted">نتيجة الحساب — اضغط لتكملة الحساب</span>

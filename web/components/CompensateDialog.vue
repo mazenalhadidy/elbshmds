@@ -77,15 +77,14 @@ async function save() {
         <div v-if="eff.virtual" class="between"><span>التصفية الافتراضية</span><span><s class="num muted">{{ fmt(day.virtual) }}</s> <b class="num">{{ fmt(after.virtual) }}</b></span></div>
         <div v-if="eff.real" class="between"><span>التصفية الحقيقية</span><span><s class="num muted">{{ fmt(day.real) }}</s> <b class="num">{{ fmt(after.real) }}</b></span></div>
         <div class="between"><span>{{ dayWord(after.diff) }}</span><b class="num" :class="tone(after.diff)">{{ fmt(Math.abs(after.diff)) }}</b></div>
-        <p v-if="eff.real" class="muted" style="margin:4px 0 0">يتغير معه «تصفية البارحة» لكل الأيام التالية.</p>
       </div>
 
-      <label class="label" for="cn">ملاحظات هذا اليوم (اكتب السبب أو أين وُجد المبلغ)</label>
+      <label class="label" for="cn">ملاحظات اليوم</label>
       <textarea id="cn" v-model="notes" class="input" rows="3"></textarea>
 
       <label class="label" for="cp">كلمة المرور</label>
       <input id="cp" v-model="password" class="input" type="password" autocomplete="current-password" />
-      <p v-if="!shop.lock.editor" class="hint warn-hint">وضع المشاهدة فقط: اضغط «تولّي التعديل» أولًا.</p>
+      <p v-if="!shop.lock.editor" class="hint warn-hint">وضع المشاهدة فقط</p>
       <p v-if="err" class="hint neg">{{ err }}</p>
       <button class="btn primary wide" style="margin-top:12px" :disabled="!ready || busy" data-test="comp-save">{{ busy ? 'جارٍ الحفظ…' : 'حفظ التعويض' }}</button>
     </form>

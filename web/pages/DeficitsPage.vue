@@ -9,7 +9,7 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useShop } from '@/stores/shop.js';
-import { fmt, fmtDate, fmtWeekday, toArabicDigits } from '@shared/money.js';
+import { fmt, fmtDate, fmtWeekday } from '@shared/money.js';
 import { deficitRecords, cumulative, diffKind, dayWord, cumulativeWord } from '@shared/deficits.js';
 import Was from '@/components/Was.vue';
 import CompensateDialog from '@/components/CompensateDialog.vue';
@@ -21,11 +21,6 @@ const total = computed(() => cumulative(shop.snap?.days));
 const tone = d => ({ deficit: 'neg', surplus: 'pos' })[diffKind(d)] || '';
 // on a phone the year is left out to keep one row: «١٦ نوفمبر»
 const fmtDayMonth = d => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', timeZone: 'UTC' }) : '');
-// Arabic counting: يوم واحد / يومان / ٣–١٠ أيام / ١١+ يومًا
-const daysText = computed(() => {
-  const n = records.value.length, d = toArabicDigits(n);
-  return n === 1 ? 'يوم واحد محفوظ' : n === 2 ? 'يومان محفوظان' : n >= 3 && n <= 10 ? `${d} أيام محفوظة` : `${d} يومًا محفوظًا`;
-});
 /** The original value, only for a day that was itself changed after closing (later days are not crossed here). */
 const was = (r, key) => (r.own && r.orig?.[key] != null && r[key] != null && Math.abs(r.orig[key] - r[key]) >= 0.005 ? r.orig[key] : null);
 const comp = ref(null), dayOpen = ref(null);
@@ -70,7 +65,6 @@ const comp = ref(null), dayOpen = ref(null);
       </table>
       <p v-if="!records.length" class="empty">لا توجد أيام محفوظة بعد</p>
     </section>
-    <p class="hint">{{ daysText }} · الرقم الأحمر عجز والأخضر زيادة · «تعويض» يعادل العجز أو الزيادة بسبب معروف · اضغط اليوم لفتحه.</p>
     <CompensateDialog v-if="comp" :day="comp" @close="comp = null" />
     <DayDialog v-if="dayOpen" :day="dayOpen" @close="dayOpen = null" />
   </div>

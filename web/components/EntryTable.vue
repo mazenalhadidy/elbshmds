@@ -73,7 +73,7 @@ defineExpose({ focus: () => amountEl.value?.focus() });
           </tr>
         </tbody>
       </table>
-      <p v-if="!rows.length" class="empty">لا يوجد — اكتب المبلغ واضغط Enter</p>
+      <p v-if="!rows.length" class="empty">لا يوجد</p>
     </div>
     <!-- the total sits on the right, under the amounts -->
     <div class="total"><span class="num">{{ fmt(total) }}</span><span>الإجمالي</span></div>

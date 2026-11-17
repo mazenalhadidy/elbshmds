@@ -48,7 +48,7 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
 
     <section class="card">
       <div class="card-h"><h2>ملاحظات اليوم</h2></div>
-      <div class="card-b"><textarea class="input" :value="shop.book.day.notes" :disabled="!shop.canEdit" placeholder="أي ملاحظة عن هذا اليوم…" @input="notes"></textarea></div>
+      <div class="card-b"><textarea class="input" :value="shop.book.day.notes" :disabled="!shop.canEdit" @input="notes"></textarea></div>
     </section>
 
     <section class="card">
@@ -56,18 +56,20 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
       <div class="card-b">
         <Calendar :saved="saved" :today="today" :selected="shop.view.editing ? null : date" :pickable="!shop.view.editing" @pick="d => (chosen = d)" @open="d => (dayOpen = d)" />
         <template v-if="!shop.view.editing">
-          <p class="hint" style="text-align:center">{{ date ? 'سيُحفظ هذا اليوم بتاريخ ' + fmtDate(date) : 'اختر تاريخًا متاحًا من التقويم' }}</p>
-          <p v-if="!shop.lock.editor" class="hint warn-hint" style="text-align:center">وضع المشاهدة فقط: جهاز آخر يعدّل الآن. اضغط «تولّي التعديل» في الأعلى لإنهاء اليوم من هذا الجهاز.</p>
+          <p class="hint" style="text-align:center">{{ date ? fmtDate(date) : 'اختر تاريخًا' }}</p>
+          <p v-if="!shop.lock.editor" class="hint warn-hint" style="text-align:center">وضع المشاهدة فقط</p>
           <button class="btn primary wide" style="margin-top:12px;min-height:48px;font-size:16px" :disabled="!date || !shop.lock.editor" @click="asking = true">إنهاء اليوم</button>
         </template>
       </div>
     </section>
 
     <PasswordDialog v-if="asking" title="إنهاء اليوم" confirm-text="إنهاء اليوم وحفظه" :run="close" @close="asking = false">
-      <p style="margin-top:0">سيُحفظ اليوم بتاريخ <b>{{ fmtDate(date) }}</b>، وتصبح التصفية الحقيقية <b class="num">{{ fmt(s.real) }}</b> هي «تصفية البارحة» لليوم التالي.</p>
-      <p v-if="uncounted" class="hint warn-hint">⚠️ لم تُكتب النقدية ولا المكن لهذا اليوم، فالتصفية الحقيقية لا تشملهما. اكتبهما في «الإدارة» قبل الإنهاء إن وُجدا.</p>
-      <p v-if="s.diff" class="hint" :class="s.diff > 0 ? 'neg' : 'pos'">يوجد {{ s.diff > 0 ? 'عجز' : 'زيادة' }} {{ fmt(Math.abs(s.diff)) }}</p>
-      <p class="hint">بعد الحفظ يمكن تعديله فقط من التقويم مع كتابة السبب وكلمة المرور.</p>
+      <div class="close-sum">
+        <div class="between"><span class="muted">التاريخ</span><b>{{ fmtDate(date) }}</b></div>
+        <div class="between"><span class="muted">التصفية الحقيقية</span><b class="num">{{ fmt(s.real) }}</b></div>
+        <div v-if="s.diff" class="between"><span :class="s.diff > 0 ? 'neg' : 'pos'">{{ s.diff > 0 ? 'عجز' : 'زيادة' }}</span><b class="num" :class="s.diff > 0 ? 'neg' : 'pos'">{{ fmt(Math.abs(s.diff)) }}</b></div>
+      </div>
+      <p v-if="uncounted" class="hint warn-hint">⚠️ لم تُكتب النقدية ولا المكن</p>
     </PasswordDialog>
     <DayDialog v-if="dayOpen" :day="dayOpen" @close="dayOpen = null" />
     <Modal v-if="openingEdit !== null" title="تصفية البارحة لأول يوم" @close="openingEdit = null">
@@ -80,4 +82,5 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
 .top-btn { padding: 8px 18px 12px; border-bottom: 1px solid var(--line); }
 .deficits-btn { min-height: 46px; text-decoration: none; font-weight: 650; color: var(--brand-ink); background: var(--brand-soft); border-color: transparent; }
 .deficits-btn:hover { background: #e7defa; }
+.close-sum { display: grid; gap: 6px; padding: 10px 12px; margin-bottom: 12px; background: var(--surface-2); border-radius: var(--radius-sm); }
 </style>
