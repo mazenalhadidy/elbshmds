@@ -18,6 +18,7 @@ import { ref, computed } from 'vue';
 import { fmt } from '@shared/money.js';
 import { diffKind, dayWord, cumulativeWord } from '@shared/deficits.js';
 import Was from './Was.vue';
+import Icon from './Icon.vue';
 const props = defineProps({
   s: Object,
   editableOpening: Boolean,
@@ -49,7 +50,7 @@ const was = key => {
         <button v-if="editableOpening" class="btn icon" title="تعديل تصفية أول يوم" @click="emit('edit-opening')">✎</button></span>
     </div>
     <div class="line">
-      <span>ربح اليوم <button class="link small" :aria-expanded="openProfit" @click="openProfit = !openProfit">{{ openProfit ? 'إخفاء التفاصيل' : 'التفاصيل' }}</button></span>
+      <span class="row">ربح اليوم <button class="more" :class="{ on: openProfit }" :aria-expanded="openProfit" :aria-label="openProfit ? 'إخفاء التفاصيل' : 'التفاصيل'" :title="openProfit ? 'إخفاء التفاصيل' : 'التفاصيل'" @click="openProfit = !openProfit"><Icon name="chev" :size="16" /></button></span>
       <Was :was="was('profit')" :v="s.profit" />
     </div>
     <div v-if="openProfit" class="parts small">
@@ -62,7 +63,7 @@ const was = key => {
     <div class="gap"></div>
 
     <div class="line strong">
-      <span>التصفية الحقيقية <button class="link small" :aria-expanded="openReal" @click="openReal = !openReal">{{ openReal ? 'إخفاء التفاصيل' : 'التفاصيل' }}</button></span>
+      <span class="row">التصفية الحقيقية <button class="more" :class="{ on: openReal }" :aria-expanded="openReal" :aria-label="openReal ? 'إخفاء التفاصيل' : 'التفاصيل'" :title="openReal ? 'إخفاء التفاصيل' : 'التفاصيل'" @click="openReal = !openReal"><Icon name="chev" :size="16" /></button></span>
       <Was :was="was('real')" :v="s.real" />
     </div>
     <div v-if="openReal" class="parts small">
@@ -115,5 +116,9 @@ const was = key => {
 .result.wait b { color: var(--muted); font-size: 16px; }
 .old { color: var(--faint); font-size: 14px; font-weight: 400; }
 .wait-note { margin: 0; padding: 0 18px 10px; color: var(--muted); }
-.link { border: 0; background: none; color: var(--brand); cursor: pointer; padding: 0 6px; font: inherit; }
+/* «التفاصيل»: a small arrow that turns when open */
+.more { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: var(--brand-soft); color: var(--brand); cursor: pointer; transition: transform .2s, background .15s; }
+.more:hover { background: #e7defa; }
+.more.on { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) { .more { transition: none; } }
 </style>
