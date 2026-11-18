@@ -73,7 +73,6 @@ describe('screens', () => {
     await wForm.find('input:not(.money)').setValue(''); await cForm.find('input:not(.money)').setValue(''); await flushPromises();
     // the calculator: 746 + 9472 = , then إنهاء
     await w.find('.calc-chip').trigger('click'); await flushPromises();
-    document.querySelector('[data-test=mode-calc]').click(); await nextTick();   // «القيمة الجديدة» is the default; this one uses «الحاسبة»
     const area = document.querySelector('textarea.lines');
     const key = k => area.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
     area.value = '746'; area.dispatchEvent(new Event('input')); await nextTick(); key('+'); await nextTick();

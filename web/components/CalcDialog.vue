@@ -1,7 +1,5 @@
 <!--
-  TODAY'S CHANGE of a client / shop debt — two ways (the first is the default):
-  «القيمة الجديدة»: type the new value; the change (new − before) is calculated and saved as one line.
-  «الحاسبة»: the calculator below. Opening it again shows the way it was written (several lines = the calculator).
+  THE CALCULATOR of a client / shop debt.
   - type a number, press + or −  -> a new line starts, the result is always shown below
   - press = (or Enter)            -> the cursor stops and only the result is shown
   - click the result              -> back to the lines, cursor at the end, continue with + or −
@@ -12,20 +10,11 @@
 import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import { evalCalc, fmt, fmtSigned, toArabicDigits, r2 } from '@shared/money.js';
 import Modal from './Modal.vue';
-import MoneyInput from './MoneyInput.vue';
 
 const props = defineProps({ name: String, opening: { type: Number, default: 0 }, calc: { type: String, default: '' }, readonly: Boolean });
 const emit = defineEmits(['close', 'save']);
 
 const text = ref(toArabicDigits(props.calc || ''));
-// the new value directly (default), unless it was written with the calculator (more than one line)
-const lines = String(props.calc || '').split('\n').filter(l => l.trim());
-const mode = ref(lines.length > 1 ? 'calc' : 'value');
-const newValue = ref(props.calc ? r2(props.opening + (evalCalc(props.calc) || 0)) : '');
-const valueEl = ref(null);
-const diff = computed(() => (newValue.value === '' ? null : r2(Number(newValue.value) - props.opening)));
-function saveValue() { if (diff.value == null) { valueEl.value?.focus(); return; } emit('save', diff.value > 0 ? '+' + diff.value : String(diff.value)); }
-function setMode(m) { mode.value = m; if (m === 'value') nextTick(() => valueEl.value?.focus()); else if (showResult.value) nextTick(() => resBtn.value?.focus()); else toEnd(); }
 const showResult = ref(false);
 const area = ref(null), resBtn = ref(null);
 const result = computed(() => evalCalc(text.value));
@@ -33,8 +22,8 @@ const valid = computed(() => Number.isFinite(result.value));
 const final = computed(() => r2(props.opening + (valid.value ? result.value : 0)));
 
 const toEnd = () => nextTick(() => { const a = area.value; if (a) { a.focus(); a.setSelectionRange(a.value.length, a.value.length); a.scrollTop = a.scrollHeight; } });
-onMounted(() => { if (mode.value === 'value') { nextTick(() => valueEl.value?.focus()); return; } if (props.calc) showResult.value = true; else toEnd(); });
-watch(showResult, v => { if (v && mode.value === 'calc') nextTick(() => resBtn.value?.focus()); });   // after = the result has the focus: Enter = إنهاء
+onMounted(() => { if (props.calc) showResult.value = true; else toEnd(); });
+watch(showResult, v => { if (v) nextTick(() => resBtn.value?.focus()); });   // after = the result has the focus: Enter = إنهاء
 
 function addSign(sign) {
   let t = text.value.replace(/\s+$/, '');
@@ -57,21 +46,8 @@ function onResultKey(e) { if (e.key === 'Enter') { e.preventDefault(); save(); }
 </script>
 
 <template>
-  <Modal :title="name" @close="emit('close')">
-    <div class="seg" style="width:100%;margin-bottom:10px" role="tablist">
-      <button role="tab" style="flex:1" :aria-selected="mode === 'value'" :class="{ on: mode === 'value' }" data-test="mode-value" @click="setMode('value')">القيمة الجديدة</button>
-      <button role="tab" style="flex:1" :aria-selected="mode === 'calc'" :class="{ on: mode === 'calc' }" data-test="mode-calc" @click="setMode('calc')">الحاسبة</button>
-    </div>
-    <div class="between small muted" style="margin-bottom:8px"><span>قبل اليوم</span><b class="num" style="color:var(--fg)">{{ fmt(opening) }}</b></div>
-
-    <template v-if="mode === 'value'">
-      <MoneyInput ref="valueEl" v-model="newValue" class="big-in" allow-negative :disabled="readonly" placeholder="القيمة الجديدة" aria-label="القيمة الجديدة" @enter="saveValue" />
-      <div class="sum">
-        <div class="between"><span class="muted">التغيير</span><b class="num">{{ diff == null ? '—' : fmtSigned(diff) }}</b></div>
-        <div class="between"><span>بعد التغيير</span><b class="num big2">{{ diff == null ? '—' : fmt(newValue) }}</b></div>
-      </div>
-    </template>
-    <template v-else>
+  <Modal :title="'حساب — ' + name" @close="emit('close')">
+    <div class="between small muted" style="margin-bottom:8px"><span>الدين الحالي</span><b class="num" style="color:var(--fg)">{{ fmt(opening) }}</b></div>
 
     <!-- the lines -->
     <textarea v-show="!showResult" ref="area" v-model="text" class="input lines" dir="ltr" rows="5" spellcheck="false"
@@ -88,21 +64,18 @@ function onResultKey(e) { if (e.key === 'Enter') { e.preventDefault(); save(); }
 
     <div class="sum">
       <div class="between"><span class="muted">النتيجة</span><b class="num" :class="valid ? '' : 'neg'">{{ valid ? fmtSigned(result) : '—' }}</b></div>
-      <div class="between"><span>بعد التغيير</span><b class="num big2">{{ fmt(final) }}</b></div>
+      <div class="between"><span>الدين بعد الحساب</span><b class="num big2">{{ fmt(final) }}</b></div>
     </div>
-    </template>
 
     <template #footer>
-      <button v-if="!readonly && text && mode === 'calc'" class="btn ghost" @click="text = ''; showResult = false; toEnd()">مسح الحساب</button>
+      <button v-if="!readonly && text" class="btn ghost" @click="text = ''; showResult = false; toEnd()">مسح الحساب</button>
       <button class="btn" @click="emit('close')">إلغاء</button>
-      <button v-if="!readonly && mode === 'value'" class="btn primary" :disabled="diff == null" data-test="save-value" @click="saveValue">إنهاء</button>
-      <button v-else-if="!readonly" class="btn primary" :disabled="!valid" @click="save">إنهاء</button>
+      <button v-if="!readonly" class="btn primary" :disabled="!valid" @click="save">إنهاء</button>
     </template>
   </Modal>
 </template>
 
 <style scoped>
-.big-in { font-size: 22px; min-height: 52px; }
 .lines { min-height: 150px; font-size: 20px; line-height: 1.75; text-align: left; font-variant-numeric: tabular-nums; }
 .result-only { all: unset; box-sizing: border-box; width: 100%; min-height: 150px; border: 1px dashed var(--line-strong); border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
 .result-only:hover { background: var(--brand-soft); }

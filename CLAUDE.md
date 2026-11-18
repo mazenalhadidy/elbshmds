@@ -41,8 +41,9 @@ described there; extend it. Every change is small and in the existing style.
   ONE fixed height (the page never jumps while searching). The first field of each table also searches it (letters
   and digits, Arabic-insensitive, spaces ignored); an exact ACTIVE duplicate is refused (same `sameKey`; the same
   number with different text is another wallet). Clients and ديون are the SAME table: التغيير | النهائي (the value
-  from before is not shown). The change opens on «القيمة الجديدة» (type the new value → the difference is saved);
-  «الحاسبة» is the second choice. A new client/debt starts with change 0. Sorted by name (rows never jump).
+  from before is not shown). التغيير = the calculator (as it always was, same look). Tapping النهائي and typing the new
+  value saves the difference as today's change. A new client/debt starts with change 0. Sorted by the balance
+  (largest first), zero balances at the bottom.
 - Delete buttons: red outline icons (never filled), with a confirmation or «تراجع».
 - اليومية: letters typed after the amount jump to the name field.
 - A value changed after a day was closed is shown **crossed out next to the new value**.

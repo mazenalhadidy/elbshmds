@@ -2,8 +2,8 @@
   One table for: wallets (المحافظ), clients (العملاء), shop debts (الديون), constants (الثوابت).
   - add: the two fields on top, Enter adds, the cursor goes back to the first field
   - wallet: ✓ = used today (others are dimmed); click the balance to change it
-  - client / debt (the same table): التغيير (today's change: the new value typed, or the calculator) | النهائي
-    the value from the day before is not shown; a row without today's change is marked until it is written (0 counts)
+  - client / debt (the same table): التغيير (the calculator) | النهائي (tap it, type the new value: the difference
+    becomes today's change). The value from the day before is not shown. Sorted by the balance (largest first).
   - wallet / constant: the amount, typed in place
   - the first field of the add row also searches the table (also in view-only mode): letters and digits, spaces ignored;
     an exact duplicate is flagged and cannot be added («0100… فودافون» and «0100… اتصالات» are different)
@@ -51,9 +51,8 @@ const list = computed(() => {
   }
   const q = query.value;
   if (q) return out.filter(x => key(x.name).includes(q)).sort((a, b) => (a.row.status === 'deleted') - (b.row.status === 'deleted') || a.name.localeCompare(b.name, 'ar'));
-  const rank = x => (x.row.status === 'deleted' ? 3 : props.type === 'wallet' ? (x.row.active ? 0 : 1) : 0);
-  // clients / debts by name: a row never jumps away while you write today's changes
-  return out.sort((a, b) => rank(a) - rank(b) || (isCalc.value ? 0 : Math.abs(b.final) - Math.abs(a.final)) || a.name.localeCompare(b.name, 'ar'));
+  const rank = x => (x.row.status === 'deleted' ? 3 : props.type === 'wallet' ? (x.row.active ? 0 : 1) : x.final === 0 && isCalc.value ? 2 : 0);
+  return out.sort((a, b) => rank(a) - rank(b) || Math.abs(b.final) - Math.abs(a.final) || a.name.localeCompare(b.name, 'ar'));
 });
 // the total never follows the search: it is always the whole table
 const total = computed(() => {
@@ -83,8 +82,17 @@ function add() {
 /* ----- change a value in place (wallet balance / constant amount) ----- */
 const editing = ref(null);
 const startEdit = x => { if (!shop.canEdit) return; editing.value = { id: x.id, value: x.row.value }; nextTick(() => document.getElementById('val-' + x.id)?.focus()); };
+/* ----- client / debt: tap النهائي and type the new value; the difference becomes today's change ----- */
+const startFinal = x => { if (!shop.canEdit || x.row.status === 'deleted') return; editing.value = { id: x.id, value: x.final, final: true }; nextTick(() => document.getElementById('val-' + x.id)?.focus()); };
+function saveFinal(e) {
+  const r = shop.book.rows[e.id]; if (!r || e.value === '') return;
+  const before = rowFinal({ ...r, calc: '' }, props.type), diff = Math.round((Number(e.value) - before) * 100) / 100;
+  if (e.value === rowFinal(r, props.type) && r.calc) return;                     // nothing changed
+  shop.dispatch({ t: 'setCalc', id: e.id, calc: diff > 0 ? '+' + diff : String(diff) });
+}
 function saveEdit() {
   const e = editing.value; editing.value = null;
+  if (e?.final) return saveFinal(e);
   if (!e || e.value === '' || e.value === shop.book.rows[e.id]?.value) return;
   shop.dispatch({ t: 'setValue', id: e.id, value: e.value });
 }
@@ -127,12 +135,15 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
 
             <template v-if="isCalc">
               <td class="n">
-                <button class="cell-btn calc-chip" :class="{ has: x.row.calc, todo: !x.row.calc && x.row.status === 'active' }" :disabled="x.row.status === 'deleted'" title="التغيير" @click="calcFor = x">
+                <button class="cell-btn calc-chip" :class="{ has: x.row.calc }" :disabled="x.row.status === 'deleted'" title="الحاسبة" @click="calcFor = x">
                   <template v-if="x.row.calc"><Money :value="x.result" signed /></template>
                   <template v-else>احسب</template>
                 </button>
               </td>
-              <td class="n"><b><Money :value="x.final" /></b></td>
+              <td class="n">
+                <MoneyInput v-if="editing && editing.id === x.id" :id="'val-' + x.id" v-model="editing.value" allow-negative @enter="saveEdit" @escape="editing = null" @blur="saveEdit" />
+                <button v-else class="cell-btn" :disabled="x.row.status === 'deleted'" title="اضغط للتعديل" data-test="final" @click="startFinal(x)"><b><Money :value="x.final" /></b></button>
+              </td>
             </template>
             <td v-else class="n">
               <MoneyInput v-if="editing && editing.id === x.id" :id="'val-' + x.id" v-model="editing.value" :allow-negative="type === 'wallet'" @enter="saveEdit" @escape="editing = null" @blur="saveEdit" />
@@ -169,6 +180,5 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
 .calc-chip { font-size: 13px; min-width: 64px; text-align: center; border: 1px dashed var(--line-strong); color: var(--muted); }
 .calc-chip.has { border-style: solid; border-color: #ddd3f5; background: var(--brand-soft); color: var(--brand-ink); }
 .calc-chip:disabled { cursor: default; opacity: .6; }
-.calc-chip.todo { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }   /* today's change not written yet */
 .scroll.fixed { height: clamp(260px, 55vh, 560px); overflow-y: auto; }
 </style>
