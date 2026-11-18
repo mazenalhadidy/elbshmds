@@ -54,6 +54,9 @@ describe('server', () => {
     const d2 = r.body.book.day.id;
     await s.call('POST', '/ops', { ops: [op({ t: 'addEntry', id: 'e', kind: 'sale', amount: 50 }), op({ t: 'setCash', value: 0 })] });
     r = await s.call('POST', '/close', { dayId: d2, date: '2026-01-02', password: 'pw' });
+    expect(r.status).toBe(400); expect(r.body.error).toMatch(/العملاء والديون/);                 // أحمد has no change written today
+    await s.call('POST', '/ops', { ops: [op({ t: 'setCalc', id: 'c1', calc: '0' })] });             // 0 counts
+    r = await s.call('POST', '/close', { dayId: d2, date: '2026-01-02', password: 'pw' });
     expect(r.body.book.day.opening).toBe(300);
     const ops = [op({ t: 'setCalc', id: 'c1', calc: '+200' }), op({ t: 'addEntry', id: 'late-sale', kind: 'sale', amount: 70, name: 'نسيته' })];
     const pv = await s.call('POST', `/days/${d1}/edit`, { ops, preview: true });

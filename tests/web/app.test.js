@@ -57,7 +57,7 @@ describe('screens', () => {
 
     // wallets & clients page
     await router.push('/accounts'); await flushPromises();
-    const [cForm, wForm] = w.findAll('form.addrow');               // clients on the right, wallets on the left
+    const [cForm, , wForm] = w.findAll('form.addrow');             // العملاء (right) · الديون · المحافظ (left)
     await wForm.find('input:not(.money)').setValue('01001234567'); await type(wForm.find('input.money'), '9000'); await press(wForm.find('input.money'), 'Enter'); await flushPromises();
     await cForm.find('input:not(.money)').setValue('أحمد'); await type(cForm.find('input.money'), '1000'); await press(cForm.find('input.money'), 'Enter'); await flushPromises();
     expect(w.text()).toContain('٩٬٠٠٠'); expect(w.text()).toContain('أحمد');
@@ -72,6 +72,7 @@ describe('screens', () => {
     await wForm.find('input:not(.money)').setValue(''); await cForm.find('input:not(.money)').setValue(''); await flushPromises();
     // the calculator: 746 + 9472 = , then إنهاء
     await w.find('.calc-chip').trigger('click'); await flushPromises();
+    document.querySelector('[data-test=mode-calc]').click(); await nextTick();   // «القيمة الجديدة» is the default; this one uses «الحاسبة»
     const area = document.querySelector('textarea.lines');
     const key = k => area.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
     area.value = '746'; area.dispatchEvent(new Event('input')); await nextTick(); key('+'); await nextTick();

@@ -64,7 +64,7 @@ const changes = computed(() => {
                   <td class="when muted"><div>{{ c.day }}</div><div v-if="c.time">{{ c.time }}</div></td>
                   <td class="what" :class="{ one: c.amount }">{{ c.what }}<template v-if="c.amount"><bdi dir="ltr" class="amt">{{ c.amount }}</bdi> {{ c.rest }}</template></td>
                   <td class="note">{{ c.note || '—' }}</td>
-                  <td v-if="shop.lock.editor" class="del"><button v-if="c.comp" class="btn icon" aria-label="حذف التعويض" title="حذف التعويض" data-test="del-comp" @click="deleting = c.comp"><Icon name="trash" :size="16" /></button></td>
+                  <td v-if="shop.lock.editor" class="del"><button v-if="c.comp" class="btn icon del" aria-label="حذف التعويض" title="حذف التعويض" data-test="del-comp" @click="deleting = c.comp"><Icon name="trash" :size="16" /></button></td>
                 </tr>
               </tbody>
             </table>

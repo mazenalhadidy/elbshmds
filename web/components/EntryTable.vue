@@ -21,7 +21,9 @@ const total = computed(() => rows.value.reduce((a, e) => a + e.amount, 0));
 const time = s => (s ? toArabicDigits(new Date(s).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })) : '');
 
 /* ----- the "add" row ----- */
-const amount = ref(''), name = ref(''), amountEl = ref(null);
+const amount = ref(''), name = ref(''), amountEl = ref(null), nameEl = ref(null);
+// letters typed in the amount go straight on in the name field
+function toName(t) { name.value += t; nextTick(() => { const el = nameEl.value; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }); }
 function add() {
   if (amount.value === '' || !(amount.value > 0)) { amountEl.value?.focus(); return; }
   if (shop.dispatch({ t: 'addEntry', id: uid(), kind: props.kind, amount: amount.value, name: name.value })) {
@@ -51,8 +53,8 @@ defineExpose({ focus: () => amountEl.value?.focus() });
   <section class="card">
     <div class="card-h"><h2>{{ title }}</h2><span class="muted small num">{{ toArabicDigits(rows.length) }} سجل</span></div>
     <form class="addrow" @submit.prevent="add">
-      <MoneyInput ref="amountEl" v-model="amount" :placeholder="'المبلغ'" style="flex:1" :disabled="!shop.canEdit" @enter="add" aria-label="المبلغ" />
-      <input v-model="name" class="input" style="flex:1.3" placeholder="الاسم (اختياري)" :disabled="!shop.canEdit" @keydown.enter.prevent="add" aria-label="الاسم" />
+      <MoneyInput ref="amountEl" v-model="amount" :placeholder="'المبلغ'" style="flex:1" :disabled="!shop.canEdit" @enter="add" @letters="toName" aria-label="المبلغ" />
+      <input ref="nameEl" v-model="name" class="input" style="flex:1.3" placeholder="الاسم (اختياري)" :disabled="!shop.canEdit" @keydown.enter.prevent="add" aria-label="الاسم" />
       <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit" aria-label="إضافة"><Icon name="plus" /></button>
     </form>
     <div class="scroll">
@@ -69,7 +71,7 @@ defineExpose({ focus: () => amountEl.value?.focus() });
               <span v-if="e.late" class="tag" :title="'كُتب أثناء يوم ' + e.late">يوم سابق</span>
               <div class="muted small num">{{ time(e.createdAt) }}</div>
             </td>
-            <td class="actions"><button class="btn icon" :disabled="!shop.canEdit" aria-label="حذف" title="حذف" @click="remove(e)"><Icon name="trash" /></button></td>
+            <td class="actions"><button class="btn icon del" :disabled="!shop.canEdit" aria-label="حذف" title="حذف" @click="remove(e)"><Icon name="trash" /></button></td>
           </tr>
         </tbody>
       </table>

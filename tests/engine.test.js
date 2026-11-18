@@ -1,6 +1,6 @@
 // The accounting rules (shared/engine.js), without server or database.
 import { describe, it, expect } from 'vitest';
-import { emptyBook, reduce, summarize, nextBook, carry, applyAll, checkCloseDate, isCashProfit, clone } from '../shared/engine.js';
+import { emptyBook, reduce, summarize, nextBook, carry, applyAll, checkCloseDate, isCashProfit, clone, unchecked, rowFinal, sameKey } from '../shared/engine.js';
 
 let n = 0;
 const st0 = (opening = 1000) => ({ items: {}, book: emptyBook('d1', opening) });
@@ -26,15 +26,32 @@ describe('engine', () => {
     expect(s.diff).toBe(0);                                      // virtual - real
   });
 
-  it('debts are typed directly (no calculator) and carry to the next day', () => {
+  it('debts are the same as clients: today\'s change, new ones start with change 0, a debt typed by hand keeps its value', () => {
     const st = st0(0);
     go(st, { t: 'addItem', id: 'd1', type: 'debt', name: 'تاجر', amount: 200 });
-    expect(() => go(st, { t: 'setCalc', id: 'd1', calc: '+50' })).toThrow();
-    go(st, { t: 'setValue', id: 'd1', value: 350 });
+    expect(st.book.rows.d1.calc).toBe('0');                                        // written today: change 0
+    expect(() => go(st, { t: 'setValue', id: 'd1', value: 5 })).toThrow();
+    go(st, { t: 'setCalc', id: 'd1', calc: '+150' });
     expect(summarize(st.book, st.items).debts).toBe(350);
-    expect(() => go(st, { t: 'setValue', id: 'd1', value: -5 })).toThrow();
     const next = nextBook(st.book, st.items, 'd2');
-    expect(next.rows.d1.value).toBe(350);
+    expect(next.rows.d1.opening).toBe(350); expect(next.rows.d1.calc).toBe('');
+    expect(unchecked(next, st.items)).toEqual(['d1']);                             // a new day: not written yet
+    // a debt typed by hand in the older version (value only): same final value, and the change starts from it
+    const old = { opening: 0, calc: '', value: 900, active: false, status: 'active' };
+    expect(rowFinal(old, 'debt')).toBe(900);
+    const st2 = { items: { x: { id: 'x', type: 'debt', name: 'قديم' } }, book: { ...emptyBook('d9', 0), rows: { x: { ...old } } } };
+    go(st2, { t: 'setCalc', id: 'x', calc: '-100' });
+    expect(rowFinal(st2.book.rows.x, 'debt')).toBe(800);
+  });
+
+  it('names and numbers are compared as they read', () => {
+    const st = st0(0);
+    go(st, { t: 'addItem', id: 'c1', type: 'client', name: 'أحمد', amount: 0 });
+    expect(() => go(st, { t: 'addItem', id: 'c2', type: 'client', name: ' احمد ', amount: 0 })).toThrow(/موجود/);
+    go(st, { t: 'addItem', id: 'w1', type: 'wallet', name: '0101 988 6531 فودافون', amount: 0 });
+    expect(() => go(st, { t: 'addItem', id: 'w2', type: 'wallet', name: '٠١٠١٩٨٨٦٥٣١ فودافون', amount: 0 })).toThrow(/موجود/);
+    go(st, { t: 'addItem', id: 'w3', type: 'wallet', name: '01019886531 اتصالات', amount: 0 });   // same number, other text: another wallet
+    expect(sameKey('0101-988 6531')).toBe('01019886531');
   });
 
   it('client calculator: final = opening + result, totals use the final', () => {

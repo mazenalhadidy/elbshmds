@@ -4,6 +4,7 @@
   "تصفية البارحة" of the next day. Click a saved (violet) day to see it or edit it.
 -->
 <script setup>
+import { unchecked } from '@shared/engine.js';
 import { ref, computed } from 'vue';
 import { useShop } from '@/stores/shop.js';
 import { useToasts } from '@/stores/toasts.js';
@@ -34,6 +35,8 @@ const canEditOpening = computed(() => shop.book?.day.seq === 1 && shop.canEdit);
 // the running total of the saved days (hidden while a saved day is being edited: it would mix two different days)
 const cum = computed(() => (shop.view?.editing ? null : cumulative(saved.value)));
 const uncounted = computed(() => !!shop.book && !shop.book.day.cashChanged && !shop.book.day.networkChanged);
+// every client and debt needs today's change written (0 counts) before the day is closed
+const notChecked = computed(() => (shop.book && !shop.view?.editing ? unchecked(shop.book, shop.items).length : 0));
 
 function notes(e) { shop.dispatch({ t: 'setNotes', notes: e.target.value }, { quiet: true }); }
 async function close(pw) {
@@ -66,8 +69,9 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
         <template v-if="!shop.view.editing">
           <p class="hint" style="text-align:center">{{ date ? fmtDate(date) : 'اختر تاريخًا' }}</p>
           <p v-if="!shop.lock.editor" class="hint warn-hint" style="text-align:center">وضع المشاهدة فقط</p>
-          <button class="btn primary wide" style="margin-top:12px;min-height:48px;font-size:16px" :disabled="!date || !shop.lock.editor || uncounted" @click="asking = true">إنهاء اليوم</button>
+          <button class="btn primary wide" style="margin-top:12px;min-height:48px;font-size:16px" :disabled="!date || !shop.lock.editor || uncounted || notChecked > 0" @click="asking = true">إنهاء اليوم</button>
           <p v-if="uncounted && shop.lock.editor" class="hint warn-hint" style="text-align:center" data-test="need-cash">⚠️ لم تُكتب النقدية ولا المكن</p>
+          <p v-if="notChecked && shop.lock.editor" class="hint warn-hint" style="text-align:center" data-test="need-check">⚠️ لم يُكتب تغيير اليوم لـ {{ toArabicDigits(notChecked) }} من العملاء والديون</p>
         </template>
       </div>
     </section>

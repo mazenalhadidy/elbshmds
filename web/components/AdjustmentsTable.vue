@@ -30,7 +30,7 @@ function add() {
         <tr v-for="a in rows" :key="a.id">
           <td class="num" :class="a.amount > 0 ? 'pos' : 'neg'" style="width:35%">{{ a.amount > 0 ? '+' : '−' }} {{ fmt(Math.abs(a.amount)) }}</td>
           <td>{{ a.note }} <span v-if="a.late" class="tag">يوم سابق</span></td>
-          <td class="actions"><button class="btn icon" aria-label="حذف" :disabled="!shop.canEdit" @click="shop.dispatch({ t: 'delAdj', id: a.id })"><Icon name="trash" /></button></td>
+          <td class="actions"><button class="btn icon del" aria-label="حذف" :disabled="!shop.canEdit" @click="shop.dispatch({ t: 'delAdj', id: a.id })"><Icon name="trash" /></button></td>
         </tr>
       </tbody>
     </table>

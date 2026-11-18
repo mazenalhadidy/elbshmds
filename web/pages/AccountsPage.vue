@@ -1,23 +1,18 @@
-<!-- العملاء والمحافظ: clients (right) and wallets (left) side by side, the shop debts folded below -->
+<!-- الحسابات: العملاء (right) · الديون (middle) · المحافظ (left) — three side by side on a computer, one at a time on a phone.
+     Each list keeps one height, so the page never moves while you search. -->
 <script setup>
-import { ref, computed } from 'vue';
-import { useShop } from '@/stores/shop.js';
+import { ref } from 'vue';
 import ItemTable from '@/components/ItemTable.vue';
-import Icon from '@/components/Icon.vue';
-import { fmt } from '@shared/money.js';
-const shop = useShop();
-const debtsOpen = ref(false);
-const debtTotal = computed(() => shop.summary?.debts || 0);
+const tab = ref('client');
+const T = [['client', 'العملاء'], ['debt', 'ديون'], ['wallet', 'المحافظ']];
 </script>
 <template>
-  <div class="page stack">
-    <div class="grid2">
-      <ItemTable type="client" title="العملاء" />
-      <ItemTable type="wallet" title="المحافظ الإلكترونية" />
+  <div class="page">
+    <div class="seg phone-only" style="margin-bottom:14px;width:100%" role="tablist">
+      <button v-for="[k, l] in T" :key="k" role="tab" :aria-selected="tab === k" :class="{ on: tab === k }" style="flex:1" @click="tab = k">{{ l }}</button>
     </div>
-    <details class="card fold" :open="debtsOpen" @toggle="e => (debtsOpen = e.target.open)">
-      <summary><Icon name="chev" class="chev" /><span>ديون</span><span class="sum num">{{ fmt(debtTotal) }}</span></summary>
-      <ItemTable type="debt" bare />
-    </details>
+    <div class="grid3">
+      <ItemTable v-for="[k, l] in T" :key="k" :type="k" :title="k === 'wallet' ? 'المحافظ الإلكترونية' : l" fixed :class="{ 'desk-only': tab !== k }" />
+    </div>
   </div>
 </template>

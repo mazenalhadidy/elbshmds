@@ -36,9 +36,8 @@ export const clone = o => JSON.parse(JSON.stringify(o));
 
 export const ITEM_TYPES = { wallet: 'محفظة', client: 'عميل', debt: 'دين على المحل', constant: 'ثابت' };
 export const ENTRY_KINDS = { input: 'المدخلات', output: 'المخرجات', sale: 'المبيعات' };
-// items whose day value comes from the calculator: clients only. Shop debts are typed directly like wallets
-// (their stored value already holds the final amount, also for days saved when debts still had a calculator).
-const hasCalc = type => type === 'client';
+// items whose day value is: what it was yesterday + today's change (the calculator, or the new value typed directly)
+const hasCalc = type => type === 'client' || type === 'debt';
 
 /* ---------------------------------------------------------------------
    Building blocks
@@ -54,15 +53,25 @@ export function emptyBook(dayId, opening = null, seq = 1) {
   };
 }
 
+/** Two names / numbers are the same item when they read the same: أ/إ/آ=ا، ة=ه، ى=ي، no tashkeel, spaces and dashes ignored, any digits. */
+export const sameKey = s => toLatinDigits(String(s ?? '')).trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\u064B-\u0652\u0640]/g, '').replace(/[\s\-_.]+/g, '');
+
+/** Clients and debts still without today's change (0 counts): the day cannot be closed before each one is written. */
+export function unchecked(book, items) {
+  return Object.entries(book.rows).filter(([id, r]) => hasCalc(items[id]?.type) && !items[id].purged && r.status === 'active' && !String(r.calc ?? '').trim()).map(([id]) => id);
+}
+
 /** A row's final value on its day. */
 export function rowFinal(row, type) {
-  if (hasCalc(type)) return r2((row.opening || 0) + (evalCalc(row.calc) || 0));
+  if (hasCalc(type)) {
+    if (!row.calc && !row.opening) return r2(row.value || 0);           // a debt typed by hand in v3.26–3.31
+    return r2((row.opening || 0) + (evalCalc(row.calc) || 0));
+  }
   return r2(row.value || 0);
 }
 
 const amountOf = (v, msg = 'القيمة غير صحيحة') => { const n = parseAmount(v); if (!Number.isFinite(n)) fail(msg); return r2(n); };
 const positive = (v, msg = 'القيمة غير صحيحة') => { const n = amountOf(v, msg); if (!(n > 0)) fail(msg); return n; };
-const positiveOrZero = (v, msg = 'القيمة غير صحيحة') => { const n = amountOf(v, msg); if (n < 0) fail(msg); return n; };
 const text = s => String(s ?? '').trim();
 
 /* ---------------------------------------------------------------------
@@ -178,7 +187,8 @@ export function reduce(state, op) {
   const ts = op.ts || new Date().toISOString();
   // two ACTIVE wallets (or clients, or debts) with the same name/number would be impossible to tell apart
   const noDuplicate = (type, name, except) => {
-    const same = Object.entries(items).find(([id, it]) => id !== except && it.type === type && !it.purged && it.name === name && book.rows[id]?.status === 'active');
+    const k = sameKey(name);
+    const same = Object.entries(items).find(([id, it]) => id !== except && it.type === type && !it.purged && sameKey(it.name) === k && book.rows[id]?.status === 'active');
     if (same) fail(type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل');
   };
 
@@ -204,11 +214,11 @@ export function reduce(state, op) {
       if (items[op.id]) return;                                        // repeated op
       const name = op.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);   // wallet numbers are stored with 0-9
       if (!name && op.type !== 'constant') fail(op.type === 'wallet' ? 'اكتب رقم المحفظة' : 'اكتب الاسم');
-      const amount = op.type === 'constant' ? positive(op.amount) : op.type === 'debt' ? positiveOrZero(op.amount, 'اكتب المبلغ') : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
+      const amount = op.type === 'constant' ? positive(op.amount) : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
       if (op.type !== 'constant') noDuplicate(op.type, name);
       items[op.id] = { id: op.id, type: op.type, name: name || ITEM_TYPES.constant, purged: false, createdAt: ts };
       book.rows[op.id] = hasCalc(op.type)
-        ? { opening: amount, calc: '', value: amount, active: false, status: 'active', changed: true, achanged: false, schanged: true }
+        ? { opening: amount, calc: '0', value: amount, active: false, status: 'active', changed: true, achanged: false, schanged: true }   // a new one = written today, change 0
         : { opening: 0, calc: '', value: amount, active: op.type === 'wallet', status: 'active', changed: true, achanged: false, schanged: true };
       return;
     }
@@ -222,7 +232,7 @@ export function reduce(state, op) {
       lateRefuse();
       const it = item(op.id), r = row(op.id);
       if (hasCalc(it.type)) fail('بيانات غير صحيحة');
-      r.value = it.type === 'constant' ? positive(op.value) : it.type === 'debt' ? positiveOrZero(op.value) : amountOf(op.value); r.changed = true; return;
+      r.value = it.type === 'constant' ? positive(op.value) : amountOf(op.value); r.changed = true; return;
     }
     case 'setActive': { item(op.id); const r = row(op.id); r.active = !!op.active; r.achanged = true; return; }
     case 'setCalc': {                                                   // the calculator of a client / shop debt
@@ -231,6 +241,7 @@ export function reduce(state, op) {
       if (!hasCalc(it.type)) fail('بيانات غير صحيحة');
       const calc = String(op.calc ?? '');
       if (!Number.isFinite(evalCalc(calc))) fail('الحساب غير صحيح — استخدم أرقامًا و + و − فقط');
+      if (!r.calc && !r.opening && r.value) r.opening = r.value;         // a debt typed by hand before: its value is the start
       r.calc = calc; r.value = rowFinal(r, it.type); return;
     }
     case 'delItem': { item(op.id); const r = row(op.id); r.status = 'deleted'; r.schanged = true; return; }   // stays visible (struck), keeps its history

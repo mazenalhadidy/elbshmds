@@ -66,6 +66,10 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .btn.sm { min-height: 34px; padding: 0 12px; font-size: 14px; }
 .btn.icon { width: 34px; min-height: 34px; padding: 0; color: var(--muted); }
 .btn.icon:hover { color: var(--fg); }
+/* delete: red, but quiet (outline) so it never looks like the main action; it still asks or offers «تراجع» */
+.btn.icon.del { color: var(--neg); border-color: #ecc9c6; }
+.btn.icon.del:hover { color: var(--neg); background: var(--neg-soft); border-color: var(--neg); }
+.btn.icon.del:disabled:hover { background: transparent; border-color: #ecc9c6; }
 .btn.wide { width: 100%; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
 

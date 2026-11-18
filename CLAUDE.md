@@ -35,9 +35,14 @@ described there; extend it. Every change is small and in the existing style.
   never inside a number, and a new line starts with its sign (`+53,000`).
 - Tables (e.g. العجوزات): right-to-left, titles on ONE line, ONE thick row per record, must fit a 360 px phone.
 - «التفاصيل» toggles are a small round arrow (no text).
-- الحسابات: العملاء on the right, المحافظ on the left. The first field of each table also searches it
-  (wallet: any number containing the typed digits; names: Arabic-insensitive); an exact ACTIVE duplicate is refused
-  («هذا الرقم موجود بالفعل» / «هذا الاسم موجود بالفعل»). Only clients have the calculator; ديون are typed directly.
+- الحسابات: العملاء (right) · الديون (middle) · المحافظ (left), side by side like اليومية (phone: tabs); each list has
+  ONE fixed height (the page never jumps while searching). The first field of each table also searches it (letters
+  and digits, Arabic-insensitive, spaces ignored); an exact ACTIVE duplicate is refused (same `sameKey`; the same
+  number with different text is another wallet). Clients and ديون are the SAME table: التغيير | النهائي (the value
+  from before is not shown). The change opens on «القيمة الجديدة» (type the new value → the difference is saved);
+  «الحاسبة» is the second choice. A new client/debt starts with change 0. Sorted by name (rows never jump).
+- Delete buttons: red outline icons (never filled), with a confirmation or «تراجع».
+- اليومية: letters typed after the amount jump to the name field.
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 
 ## Accounting decisions (do not change without asking)
@@ -53,7 +58,8 @@ described there; extend it. Every change is small and in the existing style.
   Later days changed only by an earlier day cross out ONLY تصفية البارحة.
 - تعويض is ONLY for saved (closed) days: the open day is changed directly and has no عجز/زيادة until it is closed.
 - A wrong تعويض is deleted from the saved day's changes table (password); later days go back.
-- **Closing a day**: blocked until today's cash or المكن is typed (0 counts). A date before the last saved day is
+- **Closing a day**: blocked until today's cash or المكن is typed (0 counts) AND every active client / debt has
+  today's change written (0 counts) — `unchecked()` in the engine, checked by the server too. A date before the last saved day is
   allowed, with a warning in the close dialog.
 - **Late changes** (written offline for a day that was closed meanwhile): the closed day is NEVER changed by itself.
   The server keeps them (table `late_ops`, no message on the phone) behind «تغييرات متأخرة (n)» on «التصفية»:

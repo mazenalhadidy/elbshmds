@@ -12,7 +12,7 @@ const props = defineProps({
   allowNegative: { type: Boolean, default: false },
   placeholder: { type: String, default: '٠' },
 });
-const emit = defineEmits(['update:modelValue', 'enter', 'escape']);
+const emit = defineEmits(['update:modelValue', 'enter', 'escape', 'letters']);
 const el = ref(null);
 
 /** "-0012345.5" -> "-١٢٬٣٤٥٫٥" (digits stay in the same order) */
@@ -35,7 +35,11 @@ watch(() => props.modelValue, v => {
 });
 
 function onInput(e) {
-  const input = e.target, caret = input.selectionStart;
+  const input = e.target;
+  // letters typed after the amount (e.g. «٥٠٠ شاحن»): they are not part of the number -> handed to the next field
+  const letters = input.value.match(/\p{L}[\p{L}\p{M}\s]*$/u);
+  if (letters) { input.value = input.value.slice(0, letters.index); emit('letters', letters[0]); }
+  const caret = Math.min(input.selectionStart, input.value.length);
   const before = toLatinDigits(input.value.slice(0, caret)).replace(/[^0-9.]/g, '').length;   // digits before the cursor
   const out = pretty(input.value);
   text.value = out; input.value = out;

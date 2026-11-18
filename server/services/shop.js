@@ -5,7 +5,7 @@
    and answers questions (history, calendar, ربح الكاش ...).
    ===================================================================== */
 import crypto from 'node:crypto';
-import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart } from '../../shared/engine.js';
+import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart, unchecked } from '../../shared/engine.js';
 import { describeOp } from '../../shared/describe.js';
 import { loadItems, loadDays, loadBook, saveItems, saveBook, nextRev, upsert, getMeta } from '../db/repo.js';
 
@@ -118,6 +118,8 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       if (!open) throw new UserError('لا يوجد يوم مفتوح');
       if (dayId && dayId !== open.day.id) throw new UserError('اليوم المفتوح تغيّر — حدّث الصفحة ثم أعد المحاولة');
       if (!open.day.cashChanged && !open.day.networkChanged) throw new UserError('لم تُكتب النقدية ولا المكن');
+      const left = unchecked(open, items);
+      if (left.length) throw new UserError('لم يُكتب تغيير اليوم لكل العملاء والديون (٠ مقبول)');
       try { checkCloseDate(date, today(), closedDates()); } catch (e) { throw new UserError(e.message); }
       const closed = clone(open);
       if (notes !== undefined) closed.day.notes = String(notes);
