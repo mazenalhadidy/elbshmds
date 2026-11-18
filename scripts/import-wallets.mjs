@@ -1,12 +1,15 @@
-// Adds every Egyptian mobile number found in a WhatsApp chat (.txt / .md export) as a wallet with balance 0.
-//   npm run import-wallets -- chat.txt [chat.md] (on the shop PC, while the app is running)
-//   npm run import-wallets -- chat.txt --dry    (only list the numbers)
+// Adds every Egyptian mobile number found in a WhatsApp chat as a wallet with balance 0.
+// Easiest: drag the chat (.zip, .txt or .md) onto add-wallets.cmd while the shop program is running.
+//   npm run import-wallets -- chat.zip [more files] [--dry = only list the numbers] [--yes = don't ask]
 // It goes through the app itself (POST /api/ops), so the local database, the history and the Turso copy all get it,
 // and the same rules apply: a number that already exists (active or deleted) is skipped.
 // The new wallets are not ticked ✓ (not used today).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import os from 'node:os';
+import readline from 'node:readline/promises';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
 const DIGITS = { '٠': 0, '١': 1, '٢': 2, '٣': 3, '٤': 4, '٥': 5, '٦': 6, '٧': 7, '٨': 8, '٩': 9, '۰': 0, '۱': 1, '۲': 2, '۳': 3, '۴': 4, '۵': 5, '۶': 6, '۷': 7, '۸': 8, '۹': 9 };
@@ -24,11 +27,25 @@ export function findNumbers(text) {
   return [...out];
 }
 
+/** The text of a .txt / .md file, or of every .txt / .md inside a .zip. */
+function readChat(file) {
+  if (!/\.zip$/i.test(file)) return fs.readFileSync(file, 'utf8');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chat-'));
+  try {
+    if (process.platform === 'win32') execFileSync('powershell', ['-NoProfile', '-Command', 'Expand-Archive -Force -LiteralPath $env:ZIP -DestinationPath $env:OUT'], { env: { ...process.env, ZIP: path.resolve(file), OUT: dir } });
+    else execFileSync('unzip', ['-o', '-q', path.resolve(file), '-d', dir]);
+    const texts = [];
+    const walk = d => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/\.(txt|md)$/i.test(e.name)) texts.push(fs.readFileSync(f, 'utf8')); } };
+    walk(dir);
+    return texts.join('\n');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
 async function main() {
   const args = process.argv.slice(2), dry = args.includes('--dry');
   const files = args.filter(a => !a.startsWith('--'));
-  if (!files.length) { console.log('npm run import-wallets -- <chat.txt> [more files] [--dry]'); process.exit(1); }
-  const numbers = findNumbers(files.map(f => fs.readFileSync(f, 'utf8')).join('\n'));
+  if (!files.length) { console.log('Drag the WhatsApp chat file (.zip or .txt) onto add-wallets.cmd'); process.exit(1); }
+  const numbers = findNumbers(files.map(readChat).join('\n'));
   console.log(`${numbers.length} numbers found`);
   if (dry) { console.log(numbers.join('\n')); return; }
 
@@ -45,12 +62,18 @@ async function main() {
   };
   let token;
   try { ({ token } = await call('POST', '/login', { password })); }
-  catch (e) { console.error(`Cannot log in to ${base}: ${e.message} (is the app running? is APP_PASSWORD right?)`); process.exit(1); }
+  catch (e) { console.error(e.cause ? 'The shop program is not running. Start it (start-shop.cmd), then try again.' : 'Cannot log in: ' + e.message); process.exit(1); }
   const state = await call('POST', '/lock', { take: true }, token);          // like «تولّي التعديل»
   if (!state.book) { console.error('Finish the first setup in the app first.'); process.exit(1); }
   const have = new Set(Object.values(state.items).filter(i => i.type === 'wallet' && !i.purged).map(i => i.name));
   const todo = numbers.filter(n => !have.has(n));
-  console.log(`${numbers.length - todo.length} already in the app, ${todo.length} to add`);
+  console.log(`${numbers.length - todo.length} already in the app, ${todo.length} new`);
+  if (!todo.length) { console.log('Nothing to add.'); return; }
+  if (!args.includes('--yes') && process.stdin.isTTY) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    await rl.question(`Press Enter to add the ${todo.length} new wallets (or close this window to cancel) `);
+    rl.close();
+  }
   const ops = [];
   for (const n of todo) {
     const id = randomUUID(), ts = new Date().toISOString();
@@ -64,7 +87,7 @@ async function main() {
   }
   const now = await call('GET', '/state', null, token);
   const added = todo.filter(n => Object.values(now.items).some(i => i.type === 'wallet' && i.name === n)).length;
-  console.log(`done: ${added} wallets added with balance 0${refused ? `, ${refused} refused` : ''}`);
+  console.log(`Done: ${added} wallets added with balance 0${refused ? `, ${refused} refused` : ''}.`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(e => { console.error(e.message); process.exit(1); });

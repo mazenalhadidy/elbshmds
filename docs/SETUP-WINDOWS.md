@@ -22,6 +22,7 @@ New shop (no old data): it asks for the first day's التصفية.
 ## 5. Make it easy
 - **make-desktop-shortcut.cmd** (once): an icon on the Desktop.
 - **autostart-install.cmd** (once): starts by itself, minimized, every time you log in. **autostart-remove.cmd** undoes it. **stop-shop.cmd** stops it.
+- **add-wallets.cmd**: drag a WhatsApp chat (.zip or .txt) onto it → every phone number in it becomes a wallet with balance 0.
 - **allow-phones.cmd** (once, right-click → Run as administrator): lets phones on the same Wi-Fi open it.
 
 ## Good to know

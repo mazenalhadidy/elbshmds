@@ -20,13 +20,9 @@ Works offline on every device; the shop computer keeps the database; Turso keeps
 See **docs/SETUP-WINDOWS.md** (step by step, nothing to install except Node.js). Phones: **docs/ANDROID.md**.
 
 ## Add wallets from a WhatsApp chat
-On the shop computer, with the app running (it reads the password from `.env`):
-
-    npm run import-wallets -- chat.txt --dry   # only list the numbers it finds
-    npm run import-wallets -- chat.txt         # add each one as a wallet with balance 0
-
-Every Egyptian mobile (010/011/012/015) is added once, not ticked ✓; numbers already in the app are skipped.
-It goes through the app, so the history and the Turso copy get them too. It takes «تولّي التعديل» from other devices.
+With the shop program running, drag the chat (.zip, .txt or .md) onto **add-wallets.cmd** and press Enter.
+Every Egyptian mobile in it becomes a wallet with balance 0 (not ticked ✓); numbers already in the app are skipped.
+It goes through the program, so the history and the Turso copy get them too.
 
 ## For editing the code
     npm install
