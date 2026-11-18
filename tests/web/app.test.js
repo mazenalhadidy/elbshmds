@@ -58,7 +58,7 @@ describe('screens', () => {
 
     // wallets & clients page
     await router.push('/accounts'); await flushPromises();
-    const [cForm, , wForm] = w.findAll('form.addrow');             // العملاء (right) · الديون · المحافظ (left)
+    const [cForm, wForm] = w.findAll('form.addrow');               // العملاء (right) · المحافظ · الديون (left)
     await wForm.find('input:not(.money)').setValue('01001234567'); await type(wForm.find('input.money'), '9000'); await press(wForm.find('input.money'), 'Enter'); await flushPromises();
     await cForm.find('input:not(.money)').setValue('أحمد'); await type(cForm.find('input.money'), '1000'); await press(cForm.find('input.money'), 'Enter'); await flushPromises();
     expect(w.text()).toContain('٩٬٠٠٠'); expect(w.text()).toContain('أحمد');

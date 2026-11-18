@@ -37,7 +37,7 @@ described there; extend it. Every change is small and in the existing style.
 - Tables (e.g. العجوزات): right-to-left, titles on ONE line, ONE thick row per record, must fit a 360 px phone.
 - «التفاصيل» toggles are a small round arrow (no text).
 - Every screen is checked at phone, tablet and computer widths: columns only where each one fits whole (measure).
-- الحسابات: العملاء (right) · الديون (middle) · المحافظ (left), side by side from 1000 px (narrower: tabs); each list has
+- الحسابات: العملاء (right) · المحافظ (middle) · الديون (left), side by side from 1000 px (narrower: tabs); each list has
   ONE fixed height (the page never jumps while searching). The first field of each table also searches it (letters
   and digits, Arabic-insensitive, spaces ignored); an exact ACTIVE duplicate is refused (same `sameKey`; the same
   number with different text is another wallet). Clients and ديون are the SAME table: التغيير | النهائي (the value

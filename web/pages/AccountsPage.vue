@@ -1,11 +1,11 @@
-<!-- الحسابات: العملاء (right) · الديون (middle) · المحافظ (left).
+<!-- الحسابات: العملاء (right) · المحافظ (middle) · الديون (left).
      Three side by side only where each table fits whole (≥ 1000 px); narrower (phone, tablet): tabs, one table at a time.
      Each list keeps one height, so the page never moves while you search. -->
 <script setup>
 import { ref } from 'vue';
 import ItemTable from '@/components/ItemTable.vue';
 const tab = ref('client');
-const T = [['client', 'العملاء'], ['debt', 'ديون'], ['wallet', 'المحافظ']];
+const T = [['client', 'العملاء'], ['wallet', 'المحافظ'], ['debt', 'ديون']];
 </script>
 <template>
   <div class="page">
