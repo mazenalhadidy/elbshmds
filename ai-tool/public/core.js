@@ -395,3 +395,36 @@ export function decideRoles(names, history, ai, { always = [] } = {}) {
   }
   return { shop, why, sure, changed };
 }
+
+/* ===== talking to the AI about the result ===== */
+const CHAT_MAX = 100_000;
+/**
+ * What the AI sees when the owner writes to it: who is who, the start, the calculation, the closings found, the
+ * messages it read (newest kept when too long), the last turns of this conversation, then the owner's words.
+ */
+export function chatInput({ rows, shopNames = [], clientNames = [], start = null, opening = 0, calc = '', closings = [], history = [], said }) {
+  const head = [
+    `المحل: ${shopNames.join('، ') || '؟'} · العميل: ${clientNames.join('، ') || '؟'}`,
+    start ? `البداية: #${start.i} (${start.ts}) · الرصيد ${opening}` : `البداية: من أول ما قرأتُه · الرصيد ${opening}`,
+    `الحساب الآن: ${calc}`,
+    closings.length ? 'إقفالات وجدتُها: ' + closings.map(c => `#${c.i} = ${c.balance}`).join('، ') : '',
+  ].filter(Boolean).join('\n');
+  const done = r => (r.state === 'done' && !r.sys ? ` ⟵ فهمتُها: ${r.start ? 'البداية' : KIND[r.kind] + (r.amount != null && r.kind !== 'ignore' ? ' ' + r.amount : '')}${r.partOf != null ? ' (ضمن #' + r.partOf + ')' : ''}` : '');
+  let msgs = lines(rows).split('\n').map((l, k) => l + done(rows.filter(x => !x.sys)[k]));
+  const talk = history.slice(-6).map(h => (h.me ? 'صاحب المحل: ' : 'أنت: ') + h.text).join('\n');
+  const size = () => head.length + talk.length + said.length + msgs.reduce((a, l) => a + l.length + 1, 0);
+  while (msgs.length > 1 && size() > CHAT_MAX) msgs = msgs.slice(Math.ceil(msgs.length / 10));
+  return `${head}\n\nالرسائل:\n${msgs.join('\n')}${talk ? '\n\nالحوار السابق:\n' + talk : ''}\n\nصاحب المحل الآن: ${said}`;
+}
+/** Only actions that make sense for this chat (real message numbers, known senders, real amounts). */
+export function cleanActions(actions, { rows, senders }) {
+  const has = new Set(rows.filter(r => !r.sys).map(r => r.i));
+  return (Array.isArray(actions) ? actions : []).filter(a => {
+    if (a.type === 'fix') return has.has(a.i) && ['sent', 'received', 'ignore'].includes(a.kind) && (a.kind === 'ignore' || num(a.amount) > 0);
+    if (a.type === 'start') return has.has(a.i);
+    if (a.type === 'opening') return Number.isFinite(num(a.amount));
+    if (a.type === 'side') return senders.includes(a.sender) && ['shop', 'client'].includes(a.side);
+    if (a.type === 'remember') return !!String(a.text || '').trim();
+    return false;
+  });
+}

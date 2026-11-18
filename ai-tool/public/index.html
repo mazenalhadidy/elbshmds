@@ -25,96 +25,52 @@
 </div>
 <main>
 <div class="top"><h1>مدقق الديون</h1><button class="ghost" id="logout">خروج</button></div>
-<p class="sub">ارفع المحادثة أو الصق الصور، وسأحسب لك الحساب.</p>
 
 <section class="card" id="step1">
-  <h2>١. المحادثة</h2>
   <label class="file">
     <input type="file" id="file" accept=".zip,.txt,application/zip,text/plain">
-    <span id="fileLabel">اختر ملف التصدير (.zip مع الوسائط)</span>
+    <span id="fileLabel">ملف المحادثة (.zip)</span>
   </label>
   <p class="or">أو</p>
   <label class="file" id="picsDrop">
     <input type="file" id="pics" accept="image/*" multiple>
-    <span id="picsLabel">صور ولقطات شاشة (اختر، أو الصق، أو اسحب هنا)</span>
+    <span id="picsLabel">صور</span>
   </label>
-  <textarea id="pasteText" rows="3" placeholder="الصق رسائل منسوخة من واتساب (اختياري)"></textarea>
+  <textarea id="pasteText" rows="2" placeholder="رسائل منسوخة" aria-label="رسائل منسوخة"></textarea>
   <div class="thumbs" id="thumbs"></div>
-  <div class="acts"><button id="usePics" class="hide">جهّز</button><button class="ghost hide" id="clearPics">امسح</button></div>
-  <details>
-    <summary>كيف أصدّر المحادثة؟</summary>
-    <ol><li>افتح المحادثة ← الاسم في الأعلى (آيفون) أو ⋮ ← المزيد (أندرويد).</li><li>«تصدير الدردشة» ← «إرفاق/تضمين الوسائط».</li><li>احفظ الملف ثم عُد إلى هنا.</li></ol>
-  </details>
+  <div class="acts"><button id="usePics" class="hide">احسب</button><button class="ghost hide" id="clearPics">امسح</button></div>
   <p id="err" class="warnbox hide"></p>
-</section>
-
-<section class="card hide" id="step2">
-  <h2>٢. من يمثّل المحل؟</h2>
-  <p class="note">المحل باللون البنفسجي، والباقي هو العميل. اضغط اسمًا لتغييره.</p>
-  <p class="note" id="rolesNote"></p>
-  <div class="chips" id="senders"></div>
-  <h2 style="margin-top:18px">البداية</h2>
-  <div class="seg2" id="startMode" role="radiogroup" aria-label="البداية">
-    <button type="button" data-mode="auto" role="radio" aria-checked="true">ابحث عنها بنفسك</button>
-    <button type="button" data-mode="mine" role="radio" aria-checked="false">أنا أحددها</button>
-  </div>
-  <p class="note" id="autoNote">سأقرأ آخر المحادثة وأجد آخر إقفال للحساب.</p>
-  <div class="mark hide" id="markBox">
-    <p class="note">الصق نص رسالة البداية أو اختر صورتها. سأبحث عنها من آخر المحادثة إلى أولها، وأبدأ منها.</p>
-    <textarea id="markText" rows="2" placeholder="نص رسالة البداية (أو جزء منه)"></textarea>
-    <label class="file small"><input type="file" id="markPic" accept="image/*"><span id="markPicLabel">أو صورة البداية</span></label>
-    <div id="markPreview"></div>
-    <div class="acts"><button class="ghost hide" id="markClear">مسح</button></div>
-  </div>
-  <div class="acts"><button id="go">حلّل</button></div>
-  <p id="aiNote" class="warnbox hide"></p>
-  <div id="openRow" class="hide">
-    <h2 style="margin-top:18px">رصيد البداية</h2>
-    <div id="openBox"></div>
-    <div class="grid2">
-      <input id="openAmt" inputmode="decimal" class="amt" aria-label="رصيد البداية">
-      <select id="openDir" aria-label="اتجاه البداية"><option value="1">على العميل</option><option value="-1">للعميل</option></select>
-    </div>
-  </div>
+  <button class="ghost again" id="again">محادثة أخرى</button>
 </section>
 
 <section class="card hide" id="sum" aria-live="polite">
   <div class="note" id="debtLabel">على العميل</div>
   <div class="debt" id="debt">0</div>
-  <div class="stats">
-    <div><b id="sOpen">0</b><span>البداية</span></div>
-    <div><b id="sSent">0</b><span>أرسلنا (+)</span></div>
-    <div><b id="sRec">0</b><span>استلمنا (−)</span></div>
-  </div>
   <div class="calc" dir="ltr"><pre id="eq"></pre><div class="calc-total" id="eqTotal"></div></div>
   <pre class="check hide" id="check"></pre>
-  <div class="bar"><i id="prog"></i></div>
+  <p class="note" id="facts"></p>
+  <div class="bar" id="barBox"><i id="prog"></i></div>
   <p class="note" id="progText"></p>
   <div class="acts"><button class="ghost" id="copy">انسخ الحساب</button></div>
 </section>
 
+<section class="card hide" id="talk">
+  <div class="log" id="log" aria-live="polite"></div>
+  <form class="fix" id="ask"><input id="askIn" autocomplete="off" placeholder="صحّح أو اسأل" aria-label="صحّح أو اسأل"><button id="askBtn">أرسل</button></form>
+</section>
+
 <section class="hide" id="step3">
-  <div class="filters" id="filters">
-    <button class="chip" data-f="money" aria-pressed="true">المعاملات</button>
-    <button class="chip" data-f="review" aria-pressed="false">للمراجعة <small id="revN"></small></button>
-    <button class="chip" data-f="all" aria-pressed="false">الكل</button>
-  </div>
+  <div class="list-h"><h2>الرسائل</h2><button class="chip" id="allBtn" aria-pressed="false">الكل</button></div>
   <div id="list"></div>
 </section>
 
-<section class="card" id="train">
-  <h2>التعليم</h2>
-  <p class="note">تُرسل تصحيحاتك وقواعدك مع كل تحليل.</p>
-  <div class="fix"><input id="ruleIn" placeholder="قاعدة جديدة، مثل: «وصل» = تأكيد وليس دفعًا"><button id="ruleAdd">أضف</button></div>
+<details class="card" id="train">
+  <summary>ما تعلّمته</summary>
   <ul class="rules" id="rules"></ul>
   <p class="note" id="exN"></p>
-  <div id="learnedBox" class="hide"><h2 style="margin-top:12px">خلاصة التصحيحات القديمة</h2>
-    <textarea id="learned" rows="6" aria-label="خلاصة التصحيحات القديمة"></textarea></div>
-  <details><summary>كلمات تساعدني في إيجاد الإقفال (اختياري)</summary>
-    <input id="kw" aria-label="كلمات البداية مفصولة بفاصلة">
-  </details>
+  <textarea id="learned" rows="6" class="hide" aria-label="خلاصة التصحيحات"></textarea>
   <p class="note" id="store"></p>
-</section>
+</details>
 </main>
 <div id="zoom" role="dialog" aria-label="الصورة"><img alt="صورة مكبرة"></div>
 </body>

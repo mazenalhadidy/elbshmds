@@ -64,6 +64,21 @@ balance = الرصيد بعد الإقفال (موجب = على العميل). �
     maxTokens: 4096,
     schema: obj({ roles: { type: 'array', items: obj({ sender: { type: 'string' }, side: { type: 'string', enum: ['shop', 'client'] }, confidence: { type: 'number' }, why: { type: 'string' } }) } }),
   },
+  chat: {
+    instruction: `صاحب المحل يكلّمك عن الحساب الذي حسبتَه أنت من المحادثة (الحالة والرسائل أدناه). افهم ما يريد، ونفّذه بإجراءات، ثم ردّ في reply بجملة أو جملتين قصيرتين بالعربية الفصحى.
+الإجراءات (actions):
+- fix: الرسالة #i عملية kind بمبلغ amount (أو ignore). استخدمه لكل رسالة يصححها، وللرسائل المشابهة التي يقصدها كلامه.
+- start: ابدأ الحساب من الرسالة #i (ابحث في الرسائل عن التي يصفها بالتاريخ أو النص أو المبلغ).
+- opening: رصيد البداية amount (موجب = على العميل، سالب = للعميل).
+- side: المرسل sender يمثّل side (shop أو client) — بالاسم كما في الرسائل تمامًا.
+- remember: قاعدة عامة نصّها text تريد تذكّرها في كل محادثة قادمة، فقط إن كانت عامة وليست خاصة بهذه الرسالة.
+السؤال يُجاب دون إجراءات. لا تستعمل إلا أرقام # الموجودة. إن لم تفهم فاسأل سؤالًا واحدًا قصيرًا دون إجراءات. الحقول غير المستعملة = null.`,
+    maxTokens: 8000,
+    schema: obj({ reply: { type: 'string' }, actions: { type: 'array', items: obj({
+      type: { type: 'string', enum: ['fix', 'start', 'opening', 'side', 'remember'] }, i: INT_OR_NULL,
+      kind: { anyOf: [KIND, { type: 'null' }] }, amount: NUM_OR_NULL, sender: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+      side: { anyOf: [{ type: 'string', enum: ['shop', 'client'] }, { type: 'null' }] }, text: { anyOf: [{ type: 'string' }, { type: 'null' }] } }) } }),
+  },
   lessons: {
     instruction: 'هذه فترة سابقة بين نقطتي بداية، وجاء حسابي لها خاطئًا. حدّد الرسائل التي أسأتُ فهمها على الأرجح، واستخرج حتى ٣ دروس عامة تفيد لاحقًا (دون أسماء أو مبالغ). إن لم تكن متأكدًا فأرجع قائمة فارغة.',
     maxTokens: 4096,

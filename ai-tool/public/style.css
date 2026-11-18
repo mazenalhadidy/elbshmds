@@ -32,7 +32,6 @@ ol{margin:6px 0;padding-inline-start:22px}
 .quote{background:var(--vs);border-radius:10px;padding:10px 12px;margin:6px 0;white-space:pre-wrap}
 .note{color:var(--mute);font-size:14px;margin:6px 0 0}
 .warnbox{background:var(--warnbg);color:var(--warn);border-radius:10px;padding:10px 12px;margin:8px 0;font-size:15px}
-#sum{position:sticky;top:0;z-index:5;background:var(--card)}
 .debt{font-size:clamp(34px,10vw,52px);font-weight:700;line-height:1.05;color:var(--v);font-variant-numeric:tabular-nums}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
 .stats div{background:var(--bg);border-radius:10px;padding:8px}
@@ -100,3 +99,18 @@ label.file.small{min-height:52px;margin-top:8px}
 .seg2 button{flex:1;border:0;border-radius:0;background:transparent;color:var(--v);font-weight:600}
 .seg2 button[aria-checked=true]{background:var(--v);color:#fff}
 .mark{background:var(--vs);border-radius:12px;padding:8px 12px;margin-top:10px}
+.log{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.log:empty{display:none}
+.say{max-width:88%;padding:8px 12px;border-radius:12px;white-space:pre-wrap;overflow-wrap:break-word;font-size:15px}
+.say.me{align-self:flex-start;background:var(--v);color:#fff}
+.say.ai{align-self:flex-end;background:var(--vs)}
+.say.wait{color:var(--mute)}
+.list-h{display:flex;justify-content:space-between;align-items:center;margin:6px 0 10px}
+.list-h h2{margin:0}
+#train summary{color:var(--ink);font-weight:600}
+/* a chat is loaded: the upload shrinks to one line (tap it for another chat) */
+#step1.loaded{padding:8px}
+#step1.loaded .or,#step1.loaded #picsDrop,#step1.loaded #pasteText,#step1.loaded .thumbs,#step1.loaded .acts{display:none}
+#step1 .again{display:none;width:100%}
+#step1.loaded .again{display:block}
+#step1.loaded label.file{display:none}

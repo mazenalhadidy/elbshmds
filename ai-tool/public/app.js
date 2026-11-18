@@ -1,12 +1,13 @@
-// The page: chat (zip / txt / pictures + copied messages) -> who is the shop -> the AI finds the last closing
-// by meaning -> analysis -> final calculation -> review & teach.
+// The page: give it the chat (zip / txt / pictures + copied messages) and it does everything by itself:
+// who is the shop, where the account starts (the last closing), every message, the final calculation.
+// Then you talk to it («صحّح أو اسأل») and it fixes the calculation; the messages below can be fixed by hand.
 // Logic lives in core.js; the prompts and rules live on the server (lib/ai.js).
 import {
   esc, fmt, num, clamp, KIND, IMG, MEDIA, parse, strip, prep, applyAnswer, weak,
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
   roleFromHistory, recordRoles, seedStats, rolesInput, decideRoles,
   linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression, expressionHtml,
-  parseStatement, findTextMarker, dhash, hamming, SAME_PICTURE, isTransaction,
+  parseStatement, isTransaction, chatInput, cleanActions,
 } from './core.js';
 
 const $ = s => document.querySelector(s);
@@ -15,15 +16,16 @@ const mime = f => ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', we
 const show = (el, on = true) => $(el).classList.toggle('hide', !on);
 
 /* ===== state ===== */
-const DEF = { shop: [], shopStats: {}, runs: 0, startMode: 'auto', keywords: ['بدايتنا'], rules: [], learned: '', segs: [], selfChecked: 0 };
-const TRUST_RUNS = 3;                       // after this many analyses you ran, a chat whose people are all known starts by itself
+const DEF = { shop: [], shopStats: {}, runs: 0, keywords: [], rules: [], learned: '', segs: [], selfChecked: 0 };
 const KEEP = 39;                    // newest corrections sent as they are; older ones are merged into one summary
 const IMG_AT_ONCE = 4, TEXT_AT_ONCE = 2, BATCH = 40;
 let settings = structuredClone(DEF), examples = [], key = '';
-let msgs = [], media = new Map(), shop = new Set(), cps = [], openIdx = -1, rows = [], filter = 'money', busy = false, chatName = '', stopped = false, spent = 0;
-let cp = null, startIdx = -1;               // the chosen starting point; where the analysis starts (before it when checking a statement)
+let msgs = [], media = new Map(), shop = new Set(), senders = [], cps = [], openIdx = -1, rows = [], busy = false, chatName = '', stopped = false, spent = 0;
+let cp = null, startIdx = -1, opening = 0;  // the start; where the analysis starts (before it when checking a statement); the signed opening
+// what you told it (kept when it reads the chat again): your start, your opening, your fixes per message
+let pinnedStart = null, pinnedOpening = null, fixes = new Map(), talk = [];
 const imgCache = new Map();                 // message index -> the image answer (never pay twice for the same picture)
-const PICS = 'صور';                         // sender name of pasted / picked pictures (counted as the shop; tap to change)
+const PICS = 'صور';                         // sender name of pasted / picked pictures (counted as the shop)
 const has = f => media.has(f);
 
 /* ===== server ===== */
@@ -67,7 +69,7 @@ async function loadStore() {
   if (st) settings = { ...DEF, ...st, keywords: st.keywords?.length ? [...st.keywords] : DEF.keywords };
   if (Array.isArray(ex)) examples = [...ex];
   $('#store').textContent = 'محفوظ أونلاين.';
-  renderRules(); setStartMode(settings.startMode === 'mine' ? 'mine' : 'auto');
+  renderRules();
   setTimeout(mergeOld, 0);
 }
 function showLogin(msg) { show('#login'); $('#pwErr').textContent = msg || ''; show('#pwErr', !!msg); setTimeout(() => $('#pw').focus(), 50); }
@@ -98,9 +100,8 @@ $('#file').addEventListener('change', async e => {
     if (!msgs.length) throw new Error('هذا ليس ملف تصدير من واتساب.');
     chatName = f.name.replace(/\.(zip|txt)$/i, '').replace(/^WhatsApp Chat( with| -)?\s*/i, '');
     $('#fileLabel').textContent = `${f.name} · ${msgs.length} رسالة · ${[...media.keys()].filter(k => IMG.test(k)).length} صورة`;
-    rows = []; show('#sum', false); show('#step3', false);
-    setup();
-  } catch (x) { $('#err').textContent = x.message || 'تعذّرت قراءة الملف.'; show('#err'); $('#fileLabel').textContent = 'اختر ملف التصدير (.zip مع الوسائط)'; }
+    start();
+  } catch (x) { $('#err').textContent = x.message || 'تعذّرت قراءة الملف.'; show('#err'); $('#fileLabel').textContent = 'ملف المحادثة (.zip)'; }
 });
 
 /* ===== 1b. or: pictures + copied messages (paste, pick, drop, or forward to the phone and pick) ===== */
@@ -111,7 +112,7 @@ function addPics(files) {
   if (!imgs.length) return;
   inbox.push(...imgs);
   $('#thumbs').innerHTML = inbox.map(f => `<img src="${URL.createObjectURL(f)}" alt="">`).join('');
-  $('#picsLabel').textContent = `${inbox.length} صورة · أضف أو الصق المزيد`;
+  $('#picsLabel').textContent = `${inbox.length} صورة`;
   refreshPicsButtons();
 }
 function refreshPicsButtons() { const any = inbox.length || $('#pasteText').value.trim(); show('#usePics', !!any); show('#clearPics', !!any); }
@@ -123,7 +124,7 @@ drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add(
 drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
 drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('drag'); addPics(e.dataTransfer.files); });
 $('#pasteText').addEventListener('input', refreshPicsButtons);
-$('#clearPics').addEventListener('click', () => { inbox = []; $('#thumbs').innerHTML = ''; $('#pasteText').value = ''; $('#picsLabel').textContent = 'صور ولقطات شاشة (اختر، أو الصق، أو اسحب هنا)'; refreshPicsButtons(); });
+$('#clearPics').addEventListener('click', () => { inbox = []; $('#thumbs').innerHTML = ''; $('#pasteText').value = ''; $('#picsLabel').textContent = 'صور'; refreshPicsButtons(); });
 /** Copied messages first (they carry names and times), then the pictures in the order added. */
 $('#usePics').addEventListener('click', () => {
   show('#err', false);
@@ -134,63 +135,65 @@ $('#usePics').addEventListener('click', () => {
   inbox.forEach((f, k) => { const name = `pic-${k + 1}.${picExt(f)}`; media.set(name, { async: () => Promise.resolve(f) }); list.push({ sender: PICS, ts: 'صورة ' + (k + 1), text: name + ' (file attached)' }); });
   msgs = list.map((m, i) => ({ ...m, i }));
   if (!msgs.length) return;
-  chatName = 'صور ورسائل'; rows = []; show('#sum', false); show('#step3', false);
+  chatName = 'صور ورسائل';
   $('#fileLabel').textContent = `${msgs.length} رسالة (${inbox.length} صورة)`;
-  setup();
+  start();
 });
 
-/* ===== 2. who is the shop ===== */
-/**
- * Who is the shop? 1) your past answers (a name confirmed twice the same way is decided)  2) the AI reads the
- * unknown senders  3) you only check. When everyone is known with confidence (and you have run a few analyses),
- * the analysis starts by itself — no questions.
- */
-let senders = [], roleWhy = new Map();
-async function setup() {
+
+$('#again').addEventListener('click', () => $('#step1').classList.remove('loaded'));
+
+/* ===== everything by itself ===== */
+/** A new chat: forget what was said about the previous one, then read it. */
+function start() {
+  $('#step1').classList.add('loaded');
+  pinnedStart = null; pinnedOpening = null; fixes = new Map(); talk = []; imgCache.clear();
+  $('#log').innerHTML = '';
   const cnt = new Map();
   for (const m of msgs) if (m.sender && !m.sys) cnt.set(m.sender, (cnt.get(m.sender) || 0) + 1);
   senders = [...cnt].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+  analyze({ roles: true });
+}
+/** Who is the shop: your past answers, checked by the AI in every chat (names can change). Never asks. */
+async function decideWho() {
   settings.shopStats = seedStats(settings.shopStats, settings.shop);
-  // a first guess from your answers (shown at once), then the AI checks EVERY sender from what they write
   let d = decideRoles(senders, settings.shopStats, null, { always: [PICS] });
-  shop = d.shop; roleWhy = d.why;
-  $('#openBox').innerHTML = ''; show('#openRow', false); show('#aiNote', false);
-  drawSenders(cnt);
-  show('#step2');
-  let sure = d.sure, changed = [];
-  if (key) {
-    $('#rolesNote').textContent = 'أتعرّف على أطراف المحادثة…';
-    try {
-      const known = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
-      const v = await ai('roles', rolesInput(msgs, senders.filter(n => n !== PICS), { chat: chatName, known, history: settings.shopStats }));
-      d = decideRoles(senders, settings.shopStats, new Map((v?.roles || []).map(x => [String(x.sender), x])), { always: [PICS] });
-      shop = d.shop; roleWhy = d.why; sure = d.sure; changed = d.changed;
-    } catch { /* keep the guess from your answers */ }
-    drawSenders(cnt);
-  }
-  const names = s => s.length ? s.join('، ') : '—';
-  $('#rolesNote').textContent = shop.size
-    ? `${sure ? 'عرفتُ' : 'أظن أن'} المحل: ${names(senders.filter(n => shop.has(n)))} · والعميل: ${names(senders.filter(n => !shop.has(n)))}.${sure ? '' : ' راجع الاختيار.'}`
-    : 'اختر أسماء المحل والموظفين، والباقي هو العميل.';
-  if (changed.length) {
-    $('#aiNote').textContent = '⚠️ ' + changed.map(c => `«${c.name}» كان ${c.was === 'shop' ? 'من المحل' : 'عميلًا'} سابقًا، ويبدو الآن ${c.now === 'shop' ? 'من المحل' : 'عميلًا'}`).join('، ') + '. راجع الاختيار ثم اضغط «حلّل».';
-    show('#aiNote');
-  }
-  // known chat, known people, an experienced user: don't ask, start
-  if (sure && shop.size && settings.runs >= TRUST_RUNS && !busy) {
-    $('#aiNote').textContent = 'بدأتُ التحليل تلقائيًا لأنني أعرف أطراف المحادثة. إن أردت التغيير فعدّل ثم اضغط «حلّل».'; show('#aiNote');
-    $('#go').click();
+  try {
+    $('#progText').textContent = 'أتعرّف على أطراف المحادثة…';
+    const known = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
+    const v = await ai('roles', rolesInput(msgs, senders.filter(n => n !== PICS), { chat: chatName, known, history: settings.shopStats }), { tier: 'strong' });
+    d = decideRoles(senders, settings.shopStats, new Map((v?.roles || []).map(x => [String(x.sender), x])), { always: [PICS] });
+  } catch { /* keep the guess from your answers */ }
+  shop = d.shop;
+  // a known name that now looks like the other side: never changed silently
+  if (d.changed.length) say(d.changed.map(c => `⚠️ «${c.name}» كان ${c.was === 'shop' ? 'من المحل' : 'عميلًا'} سابقًا، ويبدو الآن ${c.now === 'shop' ? 'من المحل' : 'عميلًا'}.`).join('\n'));
+}
+/** Read the chat and calculate. roles: decide who is who first (a new chat). */
+async function analyze({ roles = false } = {}) {
+  if (busy) return;
+  busy = true; stopped = false; spent = 0; lockTalk();
+  show('#sum'); show('#talk'); show('#step3'); show('#barBox'); $('#prog').style.width = '3%';
+  try {
+    if (roles) await decideWho();
+    if (!shop.size) { say('لم أعرف من يمثّل المحل. اكتب لي اسمه.'); return; }
+    settings.shopStats = recordRoles(settings.shopStats, senders.filter(n => n !== PICS), shop);
+    settings.shop = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
+    settings.runs = (settings.runs || 0) + 1; persist('settings');
+    allRows = msgs.map(m => prep(m, { shop, has })); analyzedFrom = msgs.length; cps = []; cp = null; rows = [];
+    let done = 0;
+    const step = () => { done++; $('#prog').style.width = Math.min(95, 100 * done / Math.max(1, allRows.filter(r => r.state === 'pending').length / 20 + done)) + '%'; renderSoon(); };
+    let from;
+    if (pinnedStart != null) from = await startAt(pinnedStart, step);
+    else { from = await understand(step); if (!stopped) await useStart(cps.length - 1); }
+    reapplyFixes();
+    if (pinnedOpening != null) opening = pinnedOpening;
+    $('#progText').textContent = stopped ? 'توقّف. سجّل الدخول ثم اختر المحادثة مرة أخرى.' : `قرأتُ ${msgs.length - Math.min(from, analyzedFrom)} رسالة · ≈ $${spent.toFixed(3)}`;
+    if (!stopped && !cp && pinnedStart == null) say(`لم أجد إقفالًا للحساب، فحسبتُ من ${analyzedFrom > 0 ? msgs[analyzedFrom]?.ts || 'أول ما قرأتُه' : 'أول المحادثة'} برصيد ٠. إن كنت تعرف الرصيد فاكتبه لي.`);
+    if (!stopped) learnFromHistory();
+  } finally {
+    busy = false; show('#barBox', false); unlockTalk(); render();
   }
 }
-function drawSenders(cnt) {
-  $('#senders').innerHTML = senders.map(n => `<button class="chip" data-s="${esc(n)}" aria-pressed="${shop.has(n)}" title="${esc(roleWhy.get(n) || '')}">${esc(n)}<small>${cnt.get(n)}</small></button>`).join('');
-}
-$('#senders').addEventListener('click', e => {
-  const b = e.target.closest('[data-s]'); if (!b) return; const s = b.dataset.s;
-  if (shop.has(s)) shop.delete(s); else shop.add(s);
-  roleWhy.set(s, 'اختيارك'); b.setAttribute('aria-pressed', shop.has(s));
-  $('#rolesNote').textContent = 'سأتذكّر اختيارك بعد التحليل.';
-});
 
 /* ===== understanding the chat: where was the account last closed? =====
    No fixed word. The AI reads the end of the chat (texts + what the pictures show) like an accountant:
@@ -206,7 +209,7 @@ async function findClosings(from) {
   const pics = part.filter(r => r.calc?.terms?.length >= 2).map(r => statementCp(r.i, { terms: r.calc.terms, total: r.calc.total }));
   let found = [];
   try {
-    const v = await ai('closings', lines(part));
+    const v = await ai('closings', lines(part), { tier: 'strong' });
     found = (v?.closings || []).map(c => ({ i: Number(c.i), amount: Math.abs(num(c.balance) ?? NaN), dir: num(c.balance) < 0 ? 'shop_owes' : 'client_owes', conf: clamp(c.confidence), why: String(c.why || ''), kind: c.kind }))
       .filter(c => allRows[c.i] && c.i >= from && Number.isFinite(c.amount) && c.conf >= 0.6);
   } catch { /* typed / pictured statements still work */ }
@@ -226,7 +229,7 @@ async function analyzeFrom(from, onStep) {
 async function understand(onStep) {
   let from = Math.max(0, msgs.length - WINDOW);
   for (;;) {
-    $('#progText').textContent = `جارٍ فهم آخر ${msgs.length - from} رسالة…`;
+    $('#progText').textContent = `أقرأ آخر ${msgs.length - from} رسالة…`;
     await analyzeFrom(from, onStep);
     cps = await findClosings(from);
     const last = cps[cps.length - 1];
@@ -234,67 +237,6 @@ async function understand(onStep) {
     if (enough || from === 0 || msgs.length - from >= MAX_BACK || stopped) return from;
     from = Math.max(0, from - WINDOW);
   }
-}
-function showOpening() {
-  const box = $('#openBox'); show('#openRow');
-  if (!cp) {
-    box.innerHTML = `<p class="warnbox">لم أجد إقفالًا للحساب${analyzedFrom > 0 ? ` في آخر ${msgs.length - analyzedFrom} رسالة` : ''}، لذا أحسب من ${analyzedFrom > 0 ? 'هناك' : 'أول المحادثة'}. اكتب الرصيد إن كنت تعرفه.</p>`; return;
-  }
-  const k = cps.indexOf(cp), m = msgs[cp.i];
-  const opts = cps.map((x, j) => `<option value="${j}" ${j === k ? 'selected' : ''}>${esc(msgs[x.i].ts)} · ${fmt(x.amount)}</option>`).reverse().join('');
-  box.innerHTML = `<p class="note">${cp.chosen ? 'البداية التي حددتَها' : 'بدأتُ من آخر إقفال للحساب'} · ${esc(m.sender || '')} · ${esc(m.ts)}</p><div class="quote${cp.terms ? ' expr' : ''}"${cp.terms ? ' dir="ltr"' : ''}>${cp.terms ? expressionHtml(cp.terms, cp.stated) : esc(cpText(cp))}</div>
-  <p class="note">${esc(cp.why)}</p>
-  ${cps.length > 1 ? `<label class="note" for="cpSel">ليس هذا؟ اختر غيره:</label><select id="cpSel">${opts}</select>` : ''}`;
-}
-const cpText = c => (c.terms ? expression(c.terms) + '\n=' + fmt(c.stated) : strip(msgs[c.i].text) || '[صورة]');
-
-/* ===== "our start is this": a message text or a picture, found from the end of the chat backwards ===== */
-const marker = { text: '', hash: null };
-let startMode = 'auto';                      // 'auto' = the AI finds the last closing · 'mine' = I tell it
-$('#startMode').addEventListener('click', e => {
-  const b = e.target.closest('[data-mode]'); if (!b) return;
-  setStartMode(b.dataset.mode);
-});
-function setStartMode(mode) {
-  const b = document.querySelector(`#startMode [data-mode="${mode}"]`); if (!b) return;
-  startMode = mode;
-  document.querySelectorAll('#startMode [data-mode]').forEach(x => x.setAttribute('aria-checked', x === b));
-  show('#markBox', startMode === 'mine'); show('#autoNote', startMode === 'auto');
-  if (startMode === 'mine') setTimeout(() => $('#markText').focus(), 50);
-}
-async function fingerprint(blob) {
-  const bmp = await createImageBitmap(blob);
-  const c = document.createElement('canvas'); c.width = 9; c.height = 8;
-  const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, 9, 8);
-  const d = g.getImageData(0, 0, 9, 8).data, grey = [];
-  for (let k = 0; k < d.length; k += 4) grey.push(0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2]);
-  return dhash(grey);
-}
-function refreshMarker() {
-  marker.text = $('#markText').value.trim();
-  show('#markClear', !!(marker.text || marker.hash));
-}
-$('#markText').addEventListener('input', refreshMarker);
-$('#markPic').addEventListener('change', async e => {
-  const f = e.target.files[0]; if (!f) return;
-  try { marker.hash = await fingerprint(f); $('#markPreview').innerHTML = `<img src="${URL.createObjectURL(f)}" alt="صورة البداية">`; $('#markPicLabel').textContent = 'صورة البداية محددة · غيّرها'; }
-  catch { $('#markPicLabel').textContent = 'تعذّرت قراءة الصورة'; }
-  e.target.value = ''; refreshMarker();
-});
-$('#markClear').addEventListener('click', () => {
-  marker.hash = null; $('#markText').value = ''; $('#markPreview').innerHTML = ''; $('#markPicLabel').textContent = 'أو صورة البداية'; refreshMarker();
-});
-/** Index of the marked start, searching from the last message back (pictures are compared on this device: free). */
-async function locateMarker() {
-  if (marker.text) { const i = findTextMarker(msgs, marker.text); if (i >= 0) return i; }
-  if (marker.hash) {
-    for (let k = allRows.length - 1; k >= 0; k--) {
-      const r = allRows[k]; if (!r.img) continue;
-      try { await loadBlob(r); r.hash ||= await fingerprint(r.blob); } catch { continue; }
-      if (hamming(r.hash, marker.hash) <= SAME_PICTURE) return r.i;
-    }
-  }
-  return -1;
 }
 /** The closing a row itself shows: a calculator statement, its result, or a typed statement. */
 function closingOf(r) {
@@ -306,10 +248,10 @@ function closingOf(r) {
   }
   return null;
 }
+
 /**
- * Start at message i (chosen by the user). If it closes the account (calculator, result, agreed balance) its balance
- * opens the new account; if it is a transfer it is the first operation of the new account; otherwise the account
- * starts right after it and you type the opening balance.
+ * Start at message i (you chose it). If it closes the account (calculator, result, agreed balance) its balance
+ * opens the new account; if it is a transfer it is the first operation; otherwise the account starts after it at 0.
  */
 async function startAt(i, onStep) {
   await analyzeFrom(Math.max(0, i - 3), onStep);
@@ -326,33 +268,24 @@ async function startAt(i, onStep) {
     await useStart(cps.indexOf(cp));
     return Math.min(i, analyzedFrom);
   }
-  cp = null; cps = [];
-  $('#openAmt').value = 0; $('#openDir').value = '1';           // the old opening no longer applies: messages before here are skipped
+  cp = null; cps = []; opening = 0;
   openIdx = isTransaction(r) ? i - 1 : i; startIdx = openIdx;
   rows = allRows.slice(startIdx + 1);
   for (const x of allRows) delete x.start;
-  show('#openRow');
-  $('#openBox').innerHTML = `<p class="note">البداية التي حددتَها · ${esc(msgs[i].sender || '')} · ${esc(msgs[i].ts)}</p><div class="quote">${esc(strip(msgs[i].text) || '[صورة]')}</div>
-  <p class="warnbox">${isTransaction(r) ? 'هذه أول عملية في الحساب.' : 'يبدأ الحساب بعد هذه الرسالة.'} اكتب رصيد البداية إن وُجد.</p>`;
   render();
   return i;
 }
-
 /** Use closing k as the start: its balance opens the new account; a statement is also checked. */
 async function useStart(k) {
   cp = cps[k] || null; openIdx = cp ? cp.i : analyzedFrom - 1;
-  $('#openAmt').value = cp ? cp.amount : 0; $('#openDir').value = cp?.dir === 'shop_owes' ? '-1' : '1';
+  opening = cp ? cp.amount * (cp.dir === 'shop_owes' ? -1 : 1) : 0;
   startIdx = cp?.terms ? Math.max(analyzedFrom - 1, ...cps.filter(c => c.i < cp.i).map(c => c.i)) : openIdx;
   if (startIdx + 1 < analyzedFrom) await analyzeFrom(startIdx + 1);
   rows = allRows.slice(startIdx + 1);
   for (const r of allRows) delete r.start;
   for (const r of rows) if (cps.some(c => c.i === r.i) && r.i >= openIdx) { r.start = true; r.kind = 'ignore'; }
-  showOpening(); render();
+  render();
 }
-$('#openBox').addEventListener('change', async e => { if (e.target.id === 'cpSel' && !busy) { busy = true; await useStart(Number(e.target.value)); busy = false; } });
-const openVal = () => (num($('#openAmt').value) || 0) * Number($('#openDir').value);
-$('#openAmt').addEventListener('change', () => rows.length && render());
-$('#openDir').addEventListener('change', () => rows.length && render());
 
 /* ===== 3. analysis ===== */
 async function shrink(blob) {                       // max 1600 px JPEG: smaller upload, fewer image tokens, same reading
@@ -366,7 +299,7 @@ async function shrink(blob) {                       // max 1600 px JPEG: smaller
   } catch { return blob; }
 }
 const toB64 = blob => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(blob); });
-const fail = (r, e) => { r.state = 'error'; r.kind = 'ignore'; r.flag = true; r.why = 'خطأ' + (e?.message ? ': ' + e.message : '') + '. اضغط «أعِد».'; r.ai = { kind: 'ignore', amount: null }; };
+const fail = (r, e) => { r.state = 'error'; r.kind = 'ignore'; r.flag = true; r.why = 'خطأ' + (e?.message ? ': ' + e.message : ''); r.ai = { kind: 'ignore', amount: null }; };
 
 async function loadBlob(r) {
   if (!r.blob) { const b = await media.get(r.file.toLowerCase()).async('blob'); r.blob = new Blob([b], { type: mime(r.file) }); r.url = URL.createObjectURL(r.blob); }
@@ -423,36 +356,6 @@ async function runAnalysis(list, onStep = () => {}) {
   dedupeRefs(list);
   linkGroups(list);
 }
-$('#go').addEventListener('click', async e => {
-  if (busy) return;
-  if (!shop.size) { $('#aiNote').textContent = 'اختر اسم المحل أولًا.'; show('#aiNote'); return; }
-  if (!e.isTrusted && $('#aiNote').textContent.startsWith('بدأتُ التحليل تلقائيًا')) { /* keep the note */ } else show('#aiNote', false);
-  busy = true; stopped = false; spent = 0; $('#go').disabled = true;
-  settings.shopStats = recordRoles(settings.shopStats, senders.filter(n => n !== PICS), shop);
-  settings.shop = Object.keys(settings.shopStats).filter(n => roleFromHistory(settings.shopStats, n) === 'shop');
-  settings.runs = (settings.runs || 0) + 1; settings.startMode = startMode; persist('settings');
-  allRows = msgs.map(m => prep(m, { shop, has })); analyzedFrom = msgs.length; cps = []; cp = null; rows = [];
-  show('#sum'); show('#step3');
-  let done = 0;
-  const step = () => { done++; $('#prog').style.width = Math.min(95, 100 * done / Math.max(1, allRows.filter(r => r.state === 'pending').length / 20 + done)) + '%'; renderSoon(); };
-  let from = -1;
-  if (startMode === 'mine' && !marker.text && !marker.hash) {
-    $('#aiNote').textContent = 'الصق نص رسالة البداية أو اختر صورتها، أو اختر «ابحث عنها بنفسك».'; show('#aiNote');
-    busy = false; $('#go').disabled = false; show('#sum', false); show('#step3', false); return;
-  }
-  if (startMode === 'mine') {
-    $('#progText').textContent = 'أبحث عن رسالة البداية من آخر المحادثة…';
-    const at = await locateMarker();
-    if (at >= 0) from = await startAt(at, step);
-    else { $('#aiNote').textContent = 'لم أجد رسالة البداية التي حددتها، فبحثتُ عن آخر إقفال بنفسي.'; show('#aiNote'); }
-  }
-  if (from < 0) { from = await understand(step); if (!stopped) await useStart(cps.length - 1); }
-  $('#prog').style.width = '100%';
-  $('#progText').textContent = stopped ? 'توقّف التحليل. سجّل الدخول واضغط «حلّل».' : `انتهى · قرأتُ ${msgs.length - Math.min(from, analyzedFrom)} رسالة · ≈ $${spent.toFixed(3)}`;
-  busy = false; $('#go').disabled = false; render();
-  if (!stopped) learnFromHistory();
-});
-
 /* ===== self-learning from old periods (background) =====
    Between two starting points the answer is known: next start = previous start + sent − received.
    If my reading of that period disagrees, the strong model looks for what I misread and saves lessons. */
@@ -506,30 +409,87 @@ async function mergeOld() {
   merging = false; renderRules();
 }
 
+
+/* ===== your fixes (by talking, or by hand in the list) ===== */
+/** Message i is really kind/amount: changed here, remembered for this chat, and taught for the next ones. */
+function applyFix(i, kind, amount, note = '') {
+  const r = allRows[i]; if (!r || r.sys) return;
+  const before = { kind: r.ai?.kind, amount: r.ai?.amount };
+  r.kind = kind; r.amount = kind === 'ignore' ? r.amount : num(amount); r.ok = true; r.flag = false; r.fixed = true; r.state = 'done'; r.why = note;
+  fixes.set(i, { kind: r.kind, amount: r.amount, why: note });
+  const k = chatName + '|' + msgs[i].ts + '|' + i;
+  examples = examples.filter(e => e.key !== k);
+  examples.push({ key: k, at: Date.now(), side: r.side, content: r.img ? 'صورة: ' + (r.summary || 'إيصال') + (r.text ? ' | تعليق: ' + r.text.slice(0, 120) : '') : (r.text || '').slice(0, 200), ai: before, fix: { kind: r.kind, amount: r.amount }, note });
+  persist('examples'); renderRules(); mergeOld();
+}
+function reapplyFixes() {
+  for (const [i, f] of fixes) { const r = allRows[i]; if (r) Object.assign(r, f, { ok: true, flag: false, fixed: true, state: 'done' }); }
+}
+
+/* ===== talking to it ===== */
+function say(text, me = false) {
+  talk.push({ me, text });
+  $('#log').insertAdjacentHTML('beforeend', `<div class="say ${me ? 'me' : 'ai'}">${esc(text)}</div>`);
+  show('#talk');
+}
+function lockTalk() { $('#askBtn').disabled = true; }
+function unlockTalk() { $('#askBtn').disabled = false; }
+$('#ask').addEventListener('submit', async e => {
+  e.preventDefault();
+  const said = $('#askIn').value.trim(); if (!said || busy) return;
+  $('#askIn').value = ''; say(said, true); lockTalk();
+  $('#log').insertAdjacentHTML('beforeend', '<div class="say ai wait" id="thinking">…</div>');
+  let v;
+  try {
+    const c = totals(rows, opening, openIdx), fc = finalCalc();
+    v = await ai('chat', chatInput({
+      rows: allRows, shopNames: senders.filter(n => shop.has(n)), clientNames: senders.filter(n => !shop.has(n)),
+      start: cp || pinnedStart != null ? { i: cp?.i ?? pinnedStart, ts: msgs[cp?.i ?? pinnedStart]?.ts } : null, opening,
+      calc: `${fc.eq.text.replace(/\n/g, ' ')} (${c.debt >= 0 ? 'على العميل' : 'للعميل'})`,
+      closings: cps.map(x => ({ i: x.i, balance: x.amount * (x.dir === 'shop_owes' ? -1 : 1) })), history: talk.slice(0, -1), said,
+    }), { tier: 'strong' });
+  } catch (x) { $('#thinking')?.remove(); say(x.message || 'تعذّر الاتصال.'); unlockTalk(); return; }
+  $('#thinking')?.remove();
+  const acts = cleanActions(v?.actions, { rows: allRows, senders });
+  let again = false, newStart = null;
+  for (const a of acts) {
+    if (a.type === 'remember') { settings.rules.push(String(a.text).trim()); persist('settings'); renderRules(); }
+    if (a.type === 'side') { if (a.side === 'shop') shop.add(a.sender); else shop.delete(a.sender); for (const r of allRows) if (r.sender === a.sender) imgCache.delete(r.i); again = true; }
+    if (a.type === 'fix') applyFix(a.i, a.kind, a.amount, said);
+    if (a.type === 'start') { newStart = a.i; pinnedOpening = null; }
+    if (a.type === 'opening') pinnedOpening = num(a.amount);
+  }
+  if (newStart != null) pinnedStart = newStart;
+  say(String(v?.reply || (acts.length ? 'تم.' : 'لم أفهم، وضّح أكثر.')));
+  if (again || newStart != null) await analyze();
+  else { if (pinnedOpening != null) opening = pinnedOpening; unlockTalk(); render(); }
+});
+
 /* ===== results ===== */
 let raf = 0; const renderSoon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
 /** The final calculation (as the shop writes it) and, for a statement, how it matches the chat. */
 function finalCalc() {
   const after = transactions(rows, { after: openIdx });
-  if (!cp?.terms) return { eq: equation(openVal(), after) };
+  if (!cp?.terms) return { eq: equation(opening, after) };
   const rec = reconcile({ terms: cp.terms, total: cp.stated }, transactions(rows, { before: openIdx }), { midway: startIdx < 0 });
-  return { rec, eq: after.length ? equation(openVal(), after) : rec.eq };
+  return { rec, eq: after.length ? equation(opening, after) : rec.eq };
 }
+/** Only what matters: ✓ when the statement matches, otherwise what is wrong. */
 function renderCheck(rec) {
-  const n = v => '\u2066' + (v < 0 ? '−' : '') + fmt(Math.abs(v)) + '\u2069';   // isolated left-to-right number
+  const n = v => '⁦' + (v < 0 ? '−' : '') + fmt(Math.abs(v)) + '⁩';   // isolated left-to-right number
   if (!rec) return '';
-  const ok = rec.items.filter(x => x.status === 'ok').length, miss = rec.items.filter(x => x.status === 'missing');
-  const out = [`الكشف: وجدتُ ${ok} من ${rec.items.length} بندًا في المحادثة ✓`];
-  out.push(`وُجدت في المحادثة: ${rec.items.filter(x => x.status === 'ok').map(x => n(x.amount)).join('، ') || '—'}`);
-  if (rec.before.length) out.push(`منقولة من الآلة الحاسبة، وهي قبل بداية المحادثة (ليست خطأ): ${rec.before.map(n).join('، ')}`);
+  const miss = rec.items.filter(x => x.status === 'missing'), out = [];
+  if (rec.matches && !miss.length && !rec.extra.length && rec.arithmeticOk) out.push('✓ الكشف مطابق للمحادثة');
   if (miss.length) out.push(`⚠️ في الكشف وليست في المحادثة: ${miss.map(x => n(x.amount)).join('، ')}`);
   if (rec.extra.length) out.push(`⚠️ في المحادثة وليست في الكشف: ${rec.extra.map(x => n(x.amount)).join('، ')}`);
   if (!rec.arithmeticOk) out.push('⚠️ جمع الكشف نفسه خاطئ');
-  out.push(rec.matches ? `✓ الناتج ${n(rec.stated)} صحيح` : `⚠️ حسابي ${n(rec.eq.total)} والكشف ${n(rec.stated)} (الفرق ${n(rec.eq.total - rec.stated)})`);
+  if (!rec.matches) out.push(`⚠️ حسابي ${n(rec.eq.total)} والكشف ${n(rec.stated)}`);
+  if (rec.before.length) out.push(`قبل بداية المحادثة: ${rec.before.map(n).join('، ')}`);
   return out.join('\n');
 }
+let showAll = false;
 function render() {
-  const c = totals(rows, openVal(), openIdx), fc = finalCalc();
+  const c = totals(rows, opening, openIdx), fc = finalCalc();
   $('#eq').innerHTML = expressionHtml(fc.eq.terms, fc.eq.total); $('#eqTotal').textContent = fmt(fc.eq.total);
   $('#check').textContent = renderCheck(fc.rec); show('#check', !!fc.rec);
   const tag = new Map();
@@ -537,44 +497,34 @@ function render() {
   for (const r of rows) r.tag = tag.get(r.i) || (r.partOf != null ? `ضمن #${r.partOf}` : '');
   $('#debt').textContent = fmt(Math.abs(c.debt)) + ' ج.م';
   $('#debtLabel').textContent = c.debt >= 0 ? 'على العميل' : 'للعميل عندنا';
-  const [first = 0, ...ops] = fc.eq.terms;
-  $('#sOpen').textContent = fmt(first);
-  $('#sSent').textContent = fmt(ops.filter(v => v > 0).reduce((x, v) => x + v, 0));
-  $('#sRec').textContent = fmt(-ops.filter(v => v < 0).reduce((x, v) => x + v, 0));
-  $('#revN').textContent = c.rev || '';
+  const names = s => s.join('، ') || '—', st = cp ?? (openIdx >= 0 ? { i: openIdx } : null);
+  $('#facts').textContent = `المحل: ${names(senders.filter(n => shop.has(n)))} · البداية: ${st && msgs[st.i] ? msgs[st.i].ts : 'أول المحادثة'}${c.rev ? ` · للمراجعة: ${c.rev}` : ''}`;
   const needs = r => (r.flag && !r.ok) || r.state === 'error';
-  const vis = rows.filter(r => !r.sys && !r.start && (filter === 'all' || (filter === 'review' ? needs(r) : r.kind !== 'ignore' || needs(r) || r.dirty || r.state !== 'done')));
-  $('#list').innerHTML = vis.length ? vis.map(r => card(r, c.bal.get(r.i))).join('') : `<p class="note">${filter === 'review' ? 'لا شيء يحتاج إلى مراجعة.' : 'لا توجد معاملات بعد.'}</p>`;
+  const vis = rows.filter(r => !r.sys && !r.start && (showAll || r.kind !== 'ignore' || needs(r) || r.fixed || r.state !== 'done'));
+  $('#list').innerHTML = vis.length ? vis.map(card).join('') : '<p class="note">لا توجد معاملات.</p>';
 }
-function card(r, bal) {
+function card(r) {
   const pend = r.state === 'pending';
   const seg = ['sent', 'received', 'ignore'].map(k => `<button data-k="${k}" aria-pressed="${r.kind === k}" ${pend ? 'disabled' : ''}>${KIND[k]}</button>`).join('');
-  const meta = !pend && r.state === 'done' ? `<em>· ${Math.round(r.conf * 100)}%${r.esc ? ' · بنموذج أقوى' : ''}${r.app ? ' · ' + esc(r.app) : ''}${r.learned ? ' · حُفظ' : ''}</em>` : '';
+  const meta = r.fixed ? `<em>${r.why ? ' · ' : ''}صحّحتَه</em>` : !pend && r.state === 'done' ? ` <em>· ${Math.round(r.conf * 100)}%</em>` : '';
   return `<article class="row ${r.flag && !r.ok ? 'flag' : ''}" data-i="${r.i}">
-<header><span class="who ${r.side}">${r.side === 'shop' ? 'المحل' : 'العميل'} · ${esc(r.sender)}</span><time>${esc(r.ts)}</time></header>
+<header><span class="who ${r.side}">${r.side === 'shop' ? 'المحل' : 'العميل'} · ${esc(r.sender)}</span><time>#${r.i} · ${esc(r.ts)}</time></header>
 ${r.url ? `<button class="thumb" data-act="zoom" aria-label="كبّر"><img src="${r.url}" alt="صورة"></button>` : r.img ? '<p class="note">صورة…</p>' : ''}
 ${r.text ? `<p class="msg">${esc(r.text)}</p>` : ''}
-<div class="ai">${pend ? 'جارٍ التحليل…' : esc(r.why) || '—'} ${meta}</div>
+<div class="ai">${pend ? '…' : esc(r.why)}${meta}</div>
 <div class="ctl"><div class="seg">${seg}</div><input class="amt" inputmode="decimal" value="${r.amount ?? ''}" placeholder="المبلغ" aria-label="المبلغ" ${pend ? 'disabled' : ''}></div>
-${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}${r.state === 'done' && r.i > openIdx && r.partOf == null ? `<div class="bal">الرصيد بعدها: ${fmt(Math.abs(bal ?? 0))} ${(bal ?? 0) >= 0 ? 'على العميل' : 'للعميل'}</div>` : ''}
-${r.dirty ? '<div class="fix"><input class="why" placeholder="السبب (اختياري)"><button data-act="learn">احفظ التصحيح</button></div>' : ''}
-<div class="acts">${r.flag && !r.ok && !r.dirty && !pend ? '<button class="ghost" data-act="ok">صحيح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعِد</button>' : ''}${!pend && !busy ? '<button class="ghost start-btn" data-act="start">ابدأ من هنا</button>' : ''}</div>
+${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}
+${(r.flag && !r.ok && !pend) || r.state === 'error' ? `<div class="acts">${r.flag && !r.ok && !pend ? '<button class="ghost" data-act="ok">صحيح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعِد</button>' : ''}</div>` : ''}
 </article>`;
 }
 const rowOf = el => { const a = el.closest('[data-i]'); return a && rows.find(r => r.i === Number(a.dataset.i)); };
 $('#list').addEventListener('click', async e => {
   const r = rowOf(e.target); if (!r) return;
   const k = e.target.closest('[data-k]');
-  if (k) { if (r.kind !== k.dataset.k) { r.kind = k.dataset.k; r.dirty = true; } render(); return; }
+  if (k) { if (r.kind !== k.dataset.k) applyFix(r.i, k.dataset.k, r.amount); render(); return; }
   const act = e.target.closest('[data-act]')?.dataset.act;
   if (act === 'zoom') { $('#zoom img').src = r.url; $('#zoom').style.display = 'flex'; }
   if (act === 'ok') { r.ok = true; render(); }
-  if (act === 'learn') {
-    const note = e.target.closest('article').querySelector('.why')?.value.trim() || '';
-    examples.push({ at: Date.now(), side: r.side, content: r.img ? 'صورة: ' + (r.summary || 'إيصال') + (r.text ? ' | تعليق: ' + r.text.slice(0, 120) : '') : (r.text || '').slice(0, 200), ai: r.ai, fix: { kind: r.kind, amount: r.amount }, note });
-    persist('examples'); r.dirty = false; r.ok = true; r.learned = true; renderRules(); render(); mergeOld();
-  }
-  if (act === 'start' && !busy) { busy = true; await startAt(r.i); busy = false; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
   if (act === 'retry' && !busy) {
     r.state = 'pending'; render();
     const training = trainingText(settings, examples);
@@ -584,34 +534,23 @@ $('#list').addEventListener('click', async e => {
 });
 $('#list').addEventListener('change', e => {
   if (!e.target.classList.contains('amt')) return; const r = rowOf(e.target); if (!r) return;
-  const v = num(e.target.value); if (v !== r.amount) { r.amount = v; r.dirty = true; } render();
+  const v = num(e.target.value); if (v !== r.amount) applyFix(r.i, r.kind === 'ignore' && v > 0 ? (r.side === 'shop' ? 'sent' : 'received') : r.kind, v); render();
 });
-$('#filters').addEventListener('click', e => {
-  const b = e.target.closest('[data-f]'); if (!b) return; filter = b.dataset.f;
-  document.querySelectorAll('#filters [data-f]').forEach(x => x.setAttribute('aria-pressed', x === b)); render();
-});
+$('#allBtn').addEventListener('click', () => { showAll = !showAll; $('#allBtn').setAttribute('aria-pressed', showAll); render(); });
 $('#zoom').addEventListener('click', () => { $('#zoom').style.display = 'none'; });
 $('#copy').addEventListener('click', async () => {
-  const fc = finalCalc();
-  try { await navigator.clipboard.writeText(fc.eq.text); $('#copy').textContent = 'تم النسخ ✓'; } catch { $('#copy').textContent = 'النسخ غير متاح'; }
+  try { await navigator.clipboard.writeText(finalCalc().eq.text); $('#copy').textContent = 'تم النسخ ✓'; } catch { $('#copy').textContent = 'النسخ غير متاح'; }
   setTimeout(() => { $('#copy').textContent = 'انسخ الحساب'; }, 2000);
 });
 
-/* ===== teaching: rules, summary, keywords ===== */
+/* ===== what it learned (rules you told it, your fixes, lessons it found itself) ===== */
 function renderRules() {
   $('#rules').innerHTML = settings.rules.map((x, k) => `<li><span>${esc(x)}</span><button class="ghost" data-del="${k}" aria-label="احذف">حذف</button></li>`).join('');
-  const act = examples.filter(e => !e.merged).length;
-  $('#exN').textContent = [examples.length ? `${examples.length} تصحيحًا (${examples.length - act} منها في الخلاصة)` : 'لا توجد تصحيحات بعد', settings.selfChecked ? `راجعتُ ${settings.selfChecked} فترة تلقائيًا` : ''].filter(Boolean).join(' · ');
-  $('#learned').value = settings.learned; show('#learnedBox', !!settings.learned);
-  $('#kw').value = settings.keywords.join('، ');
+  $('#exN').textContent = [examples.length ? `${examples.length} تصحيحًا` : '', settings.selfChecked ? `راجعتُ ${settings.selfChecked} فترة بنفسي` : ''].filter(Boolean).join(' · ');
+  $('#learned').value = settings.learned; show('#learned', !!settings.learned);
 }
-$('#ruleAdd').addEventListener('click', () => { const v = $('#ruleIn').value.trim(); if (!v) return; settings.rules.push(v); $('#ruleIn').value = ''; persist('settings'); renderRules(); });
 $('#rules').addEventListener('click', e => { const b = e.target.closest('[data-del]'); if (!b) return; settings.rules.splice(Number(b.dataset.del), 1); persist('settings'); renderRules(); });
 $('#learned').addEventListener('change', () => { settings.learned = $('#learned').value.trim(); persist('settings'); renderRules(); });
-$('#kw').addEventListener('change', () => {
-  const v = $('#kw').value.split(/[،,]/).map(s => s.trim()).filter(Boolean);
-  settings.keywords = v.length ? v : DEF.keywords; persist('settings'); renderRules();
-});
 
 /* ===== start ===== */
 renderRules();

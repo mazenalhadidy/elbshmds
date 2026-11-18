@@ -69,10 +69,13 @@ described there; extend it. Every change is small and in the existing style.
 - Input: WhatsApp export (.zip/.txt) OR pictures + pasted messages.
 - Ready-to-use Windows package: `npm --prefix ai-tool run package` → `ai-tool/release/wa-debt-checker.zip`
   (START.cmd, one bundled server file, only Node.js needed). Give him that zip when the AI tool changes.
-- Start: two options — «ابحث عنها بنفسك» (the AI finds the last account closing by meaning, no keyword) or
-  «أنا أحددها» (start text/picture, searched from the END of the chat). «ابدأ من هنا» on any message.
-- Who is the shop: judged by the AI in EVERY chat (names can change); past answers are evidence, not rules;
-  a known name that seems to switch side is never changed silently. Auto-start when everyone is known and ≥3 runs.
+- **Everything by itself**: choosing the chat runs it all — who is the shop (AI, every chat), the start (the last
+  account closing, found by meaning), every message, the final calculation. No questions, no options, little text.
+  Then the owner TALKS to it («صحّح أو اسأل», task `chat`, strong model): it answers and applies actions
+  (fix a message, start from a message, opening balance, who is the shop, remember a rule). The messages list below
+  is for fixing by hand; every fix (talk or hand) is kept for this chat and taught for the next ones.
+- Who is the shop: past answers are evidence, not rules; a known name that seems to switch side is said in the talk,
+  never changed silently.
 - Split transfers («تم ٥٠٠٠٠» after receipts) count once; a calculator statement is the start and is checked against
   the chat; terms older than the chat are "before the chat", not errors.
 
