@@ -11,7 +11,8 @@ async function until(fn, label = '') { for (let i = 0; i < 150; i++) { await flu
 
 beforeAll(async () => {
   s = await boot();
-  globalThis.fetch = (u, o) => (offline ? Promise.reject(new TypeError('offline')) : realFetch(new URL(u, s.base), o));
+  // jsdom's AbortSignal is not accepted by Node 24's fetch: the screens' timeouts are not needed here
+  globalThis.fetch = (u, { signal, ...o } = {}) => (offline ? Promise.reject(new TypeError('offline')) : realFetch(new URL(u, s.base), o));
   window.confirm = () => true;
 });
 afterAll(() => { globalThis.fetch = realFetch; s.close(); });
