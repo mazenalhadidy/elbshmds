@@ -8,7 +8,8 @@ Architecture, formulas and tables: `docs/ARCHITECTURE.md`. Do NOT re-design what
 described there; extend it. Every change is small and in the existing style.
 
 ## How to work with the owner
-- **Never push to GitHub** unless he asks in that message. Commit on the working branch, then give him a zip:
+- **Always push** every finished change (he asked): the working branch AND `main` (on the shop PC «تحديث متاح»
+  appears once CI's `release-gate` passed). Also give him the zip:
   `git archive --format=zip --prefix=elbshmds/ -o <scratchpad>/elbshmds-vX.Y.zip HEAD`.
 - **The two zips are ALWAYS the last thing of every final reply**: the shop zip (above) AND the ready AI zip
   (in the wa-debt-checker repo: `npm run package` → `release/wa-debt-checker.zip`, copied to
