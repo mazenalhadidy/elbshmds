@@ -45,14 +45,14 @@ describe('screens', () => {
     await until(() => w.text().includes('اليومية'), 'main');
 
     // quick entry: amount + Enter, the cursor stays for the next one
-    const input = w.findAll('form.addrow')[0];
+    const input = w.findAll('form.addrow')[1];
     const amount = input.find('input.money');
     await type(amount, '500'); await press(amount, 'Enter'); await flushPromises();
     await type(amount, '٢٥٠'); await input.find('input:not(.money)').setValue('شحن'); await press(amount, 'Enter'); await flushPromises();
     expect(document.activeElement).toBe(amount.element);
     expect(w.text()).toContain('٧٥٠');                                              // total of المدخلات
     expect(w.text()).toContain('شحن');
-    const output = w.findAll('form.addrow')[1].find('input.money');
+    const output = w.findAll('form.addrow')[2].find('input.money');
     await type(output, '100'); await press(output, 'Enter'); await flushPromises();
 
     // wallets & clients page
@@ -131,7 +131,7 @@ describe('screens', () => {
     // OFFLINE: changes appear at once, wait, then arrive
     offline = true;
     await router.push('/'); await flushPromises();
-    const amt2 = w.findAll('form.addrow')[2].find('input.money');                      // المبيعات
+    const amt2 = w.findAll('form.addrow')[0].find('input.money');                      // المبيعات
     await type(amt2, '75'); await press(amt2, 'Enter'); await flushPromises();
     await shop.sync();
     expect(shop.connected).toBe(false); expect(shop.pending).toHaveLength(1);

@@ -1,9 +1,9 @@
-<!-- اليومية: المدخلات · المخرجات · المبيعات (three side by side on a computer, one at a time on a phone) -->
+<!-- اليومية: المبيعات (right) · المدخلات (middle) · المخرجات (left) (three side by side on a computer, one at a time on a phone) -->
 <script setup>
 import { ref } from 'vue';
 import EntryTable from '@/components/EntryTable.vue';
 const tab = ref('input');
-const T = [['input', 'المدخلات'], ['output', 'المخرجات'], ['sale', 'المبيعات']];
+const T = [['sale', 'المبيعات'], ['input', 'المدخلات'], ['output', 'المخرجات']];
 </script>
 <template>
   <div class="page">

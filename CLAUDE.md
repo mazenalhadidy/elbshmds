@@ -31,7 +31,8 @@ described there; extend it. Every change is small and in the existing style.
   and the colour (red عجز, green زيادة). Cumulative: «عجز تراكمي» / «زيادة تراكمية».
 - In the day summary the day's عجز/زيادة row is coloured entirely; in the cumulative group only the word and number.
 - Words: «ديون» (not الديون على المحل), «المكن» (not رصيد ماكينات الشبكة).
-- اليومية (inputs/outputs/sales): amounts aligned to the **right**.
+- اليومية: المبيعات on the right, المدخلات in the middle, المخرجات on the left (same order in the phone tabs);
+  amounts aligned to the **right**.
 - Calculations written like a calculator (AI tool final result): **left-to-right**, a line breaks only between numbers,
   never inside a number, and a new line starts with its sign (`+53,000`).
 - Tables (e.g. العجوزات): right-to-left, titles on ONE line, ONE thick row per record, must fit a 360 px phone.
