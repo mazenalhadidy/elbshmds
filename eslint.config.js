@@ -5,7 +5,7 @@ import vue from 'eslint-plugin-vue';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/**', 'app/**', 'data/**', 'node_modules/**', 'ai-tool/public/jszip.min.js', 'ai-tool/node_modules/**', 'ai-tool/.netlify/**'] },
+  { ignores: ['dist/**', 'app/**', 'data/**', 'node_modules/**', 'ai-tool/public/jszip.min.js', 'ai-tool/node_modules/**', 'ai-tool/release/**', 'ai-tool/.netlify/**'] },
   js.configs.recommended,
   ...vue.configs['flat/essential'],
   {

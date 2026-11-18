@@ -60,6 +60,8 @@ described there; extend it. Every change is small and in the existing style.
 ## AI tool decisions (`ai-tool/`)
 - Prompts, rules and JSON schemas live on the server (`lib/ai.js`); the page sends a task name. Prompt caching on.
 - Input: WhatsApp export (.zip/.txt) OR pictures + pasted messages.
+- Ready-to-use Windows package: `npm --prefix ai-tool run package` → `ai-tool/release/wa-debt-checker.zip`
+  (START.cmd, one bundled server file, only Node.js needed). Give him that zip when the AI tool changes.
 - Start: two options — «ابحث عنها بنفسك» (the AI finds the last account closing by meaning, no keyword) or
   «أنا أحددها» (start text/picture, searched from the END of the chat). «ابدأ من هنا» on any message.
 - Who is the shop: judged by the AI in EVERY chat (names can change); past answers are evidence, not rules;

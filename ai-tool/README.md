@@ -63,6 +63,11 @@
 - **تحليل أسرع:** ٤ صور في وقت واحد، ودفعات النصوص بالتوازي.
 - إصلاح: نماذج 5.5 ترفض المعامل `temperature`، فأُزيل.
 
+## النسخة الجاهزة للتشغيل (Windows، دون تثبيت)
+`npm run package` يصنع المجلد `release/wa-debt-checker` (وملف zip): فك الضغط ← انقر مرتين على `START.cmd` ←
+أول مرة اكتب `password` و`anthropicApiKey` في Notepad ← يفتح المتصفح. المطلوب Node.js فقط (لا `npm install`).
+التفاصيل في `READ-ME.txt` داخل المجلد. ويصنعها CI أيضًا مع كل دفع (Artifact باسم `wa-debt-checker-ready`).
+
 ## التشغيل على Netlify
 1. Netlify ← Add new site ← Import from Git ← المستودع `elbshmds` ← **Base directory: `ai-tool`** ← Deploy.
 2. Environment variables: `ANTHROPIC_API_KEY` (من console.anthropic.com، مع وضع حد شهري للإنفاق) و`APP_PASSWORD` (١٢ حرفًا أو أكثر). ثم Trigger deploy.
