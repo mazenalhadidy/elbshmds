@@ -14,7 +14,7 @@ export default defineConfig({
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: false },
   server: { proxy: { '/api': 'http://localhost:3000' } },             // `npm run dev`: screens on 5173, API from the running server
   test: {
-    include: ['tests/**/*.test.js'],              // ai-tool/ has its own tests (npm run test:ai)
+    include: ['tests/**/*.test.js'],
     environment: 'node',
     environmentMatchGlobs: [['tests/web/**', 'jsdom']],
     testTimeout: 20000,

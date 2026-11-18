@@ -5,7 +5,7 @@ import vue from 'eslint-plugin-vue';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/**', 'app/**', 'data/**', 'node_modules/**', 'ai-tool/public/jszip.min.js', 'ai-tool/node_modules/**', 'ai-tool/release/**', 'ai-tool/.netlify/**'] },
+  { ignores: ['dist/**', 'app/**', 'data/**', 'node_modules/**'] },
   js.configs.recommended,
   ...vue.configs['flat/essential'],
   {
@@ -17,6 +17,4 @@ export default [
     },
   },
   { files: ['public/sw.js'], languageOptions: { globals: globals.serviceworker } },
-  { files: ['ai-tool/netlify/edge-functions/**'], languageOptions: { globals: { Netlify: 'readonly', Deno: 'readonly' } } },
-  { files: ['ai-tool/netlify/functions/**'], languageOptions: { globals: { Netlify: 'readonly' } } },
 ];

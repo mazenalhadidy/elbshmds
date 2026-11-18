@@ -1,9 +1,8 @@
-# CI/CD for both apps. Runs on every push and pull request.
+# CI/CD of the shop app. Runs on every push and pull request.
 #   shop:     lint -> tests (Linux, Node 22 + 24) -> Windows quick tests -> build -> release-gate
-#   ai-tool:  its own tests (only its folder)
 #   docker:   builds the server image; on main it is published to ghcr.io (CD for cloud/NAS installs)
-# The shop computer's updater (scripts/updater.js) installs a commit ONLY when "release-gate" passed.
-# The AI tool is deployed by Netlify from ai-tool/ (see ai-tool/netlify.toml).
+# The shop computer offers «تحديث متاح» ONLY for a commit whose "release-gate" passed.
+# The AI debt checker lives in its own repository (with its own CI).
 name: CI
 on:
   push:
@@ -60,22 +59,6 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run test:quick
       - run: npm run build
-
-  ai-tool:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run: { working-directory: ai-tool }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: npm, cache-dependency-path: ai-tool/package-lock.json }
-      - run: npm ci --no-audit --no-fund
-      - run: npm test
-      - name: Build the ready-to-use package (unzip + START.cmd, no install)
-        run: npm run package
-      - uses: actions/upload-artifact@v4
-        with: { name: wa-debt-checker-ready, path: ai-tool/release/wa-debt-checker, retention-days: 30 }
 
   docker:
     runs-on: ubuntu-latest

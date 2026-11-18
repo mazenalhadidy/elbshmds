@@ -73,5 +73,5 @@ except the in-memory editor lock, which is per install by design.
 1. Every push / pull request: lint + `npm audit` → tests on Linux (Node 22 and 24) and Windows → build → Docker image built and smoke-tested.
 2. **release-gate** passes only when every shop check passed. The shop computer's updater installs a commit only when it passed (`docs/UPDATING.md`).
 3. On `main`: the Docker image is published to `ghcr.io/<owner>/elbshmds` (`latest` + commit) for cloud/NAS installs.
-4. `ai-tool/` is tested in its own job and deployed by Netlify (only when that folder changed).
+4. The AI debt checker is a separate repository (`wa-debt-checker`) with its own CI and Netlify deploy.
 5. Dependabot opens weekly update pull requests; each runs the same checks.

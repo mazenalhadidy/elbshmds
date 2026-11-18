@@ -1,25 +1,23 @@
 # CLAUDE.md — read this first (owner's rules and the project's decisions)
 
-This repo has two apps for «محل الباشمهندس» (a mobile / e-wallet shop in Egypt):
-- **The shop app** (repo root): Vue 3 + Pinia front end (`web/`), Node/Express back end (`server/`),
-  local SQLite + Turso online copy, shared accounting rules (`shared/`). Runs on the shop PC; phones open it.
-- **The AI debt checker** (`ai-tool/`): reads WhatsApp chats / pictures and writes the final calculation. Netlify or local.
+The shop app of «محل الباشمهندس» (a mobile / e-wallet shop in Egypt): Vue 3 + Pinia front end (`web/`),
+Node/Express back end (`server/`), local SQLite + Turso online copy, shared accounting rules (`shared/`).
+Runs on the shop PC; phones open it. The AI debt checker is a SEPARATE repository: `mazenalhadidy/wa-debt-checker`.
 
-Architecture, formulas and tables: `docs/ARCHITECTURE.md`. AI tool: `ai-tool/README.md`. Do NOT re-design what is
+Architecture, formulas and tables: `docs/ARCHITECTURE.md`. Do NOT re-design what is
 described there; extend it. Every change is small and in the existing style.
 
 ## How to work with the owner
 - **Never push to GitHub** unless he asks in that message. Commit on the working branch, then give him a zip:
-  `git archive --format=zip --prefix=elbshmds/ -o <scratchpad>/elbshmds-vX.Y.zip HEAD`
-  (and `HEAD:ai-tool` with prefix `wa-debt-checker/` when the AI tool changed).
+  `git archive --format=zip --prefix=elbshmds/ -o <scratchpad>/elbshmds-vX.Y.zip HEAD`.
 - **The two zips are ALWAYS the last thing of every final reply**: the shop zip (above) AND the ready AI zip
-  (`npm --prefix ai-tool run package` → `ai-tool/release/wa-debt-checker.zip`, copied to `<scratchpad>/wa-debt-checker-READY.zip`),
-  even when only one app changed.
+  (in the wa-debt-checker repo: `npm run package` → `release/wa-debt-checker.zip`, copied to
+  `<scratchpad>/wa-debt-checker-READY.zip`), even when only one app changed.
 - **Screenshots**: none while working. At the END of the reply, send the screenshots you took while testing
   (phone 390 px first). Send others only when he asks.
 - Ask only when a choice really changes the result; otherwise decide and say so briefly.
 - Reply in English, short and plain; Arabic only for the exact UI words.
-- Before finishing: `npm run lint`, `npm test`, `npm run build` (and `npm --prefix ai-tool test` if the AI tool changed).
+- Before finishing: `npm run lint`, `npm test`, `npm run build` (and `npm test` in wa-debt-checker if it changed).
   Check the screen in the browser (Playwright, phone 390 px and 1280 px) — measure, don't guess.
 
 ## UI rules (he asked for each of these)
@@ -64,21 +62,14 @@ described there; extend it. Every change is small and in the existing style.
 - Renaming / restoring an item can never create two ACTIVE items of the same type with the same name.
 - Database: never edit an old migration; add a new one at the end of `server/db/schema.js`.
 
-## AI tool decisions (`ai-tool/`)
-- Prompts, rules and JSON schemas live on the server (`lib/ai.js`); the page sends a task name. Prompt caching on.
-- Input: WhatsApp export (.zip/.txt) OR pictures + pasted messages.
-- Ready-to-use Windows package: `npm --prefix ai-tool run package` → `ai-tool/release/wa-debt-checker.zip`
-  (START.cmd, one bundled server file, only Node.js needed). Give him that zip when the AI tool changes.
-- **Everything by itself**: choosing the chat runs it all — who is the shop (AI, every chat), the start (the last
-  account closing, found by meaning), every message, the final calculation. No questions, no options, little text.
-  Then the owner TALKS to it («صحّح أو اسأل», task `chat`, strong model): it answers and applies actions
-  (fix a message, start from a message, opening balance, who is the shop, remember a rule). The messages list below
-  is for fixing by hand; every fix (talk or hand) is kept for this chat and taught for the next ones.
-- Who is the shop: past answers are evidence, not rules; a known name that seems to switch side is said in the talk,
-  never changed silently.
-- Split transfers («تم ٥٠٠٠٠» after receipts) count once; a calculator statement is the start and is checked against
-  the chat; terms older than the chat are "before the chat", not errors.
+## Updates (shop PC)
+- The launcher (`scripts/updater.js`) only PREPARES a new version from GitHub `main` (download, install, build,
+  tests). Nothing is installed by itself: the app shows «تحديث متاح»; it installs only after the button + the
+  update password (`UPDATE_PASSWORD` in `.env`, chosen by the owner; not the login password).
+- The switch must never lose data: graceful stop (requests finish, last Turso push, DB closed), DB copied to
+  `data/backups/before-update-<sha>/`, new version started; if it is not healthy the copy is put back and the old
+  version starts. Phones keep unsent changes on the phone and send them after (same opId, never twice).
 
 ## CI/CD
-`.github/workflows/ci.yml`: lint, tests (Node 22/24 + Windows), build, Docker image, AI-tool tests, `release-gate`.
-The shop PC's updater installs a commit only if `release-gate` passed. Keep CI green.
+`.github/workflows/ci.yml`: lint, tests (Node 22/24 + Windows), build, Docker image, `release-gate`.
+«تحديث متاح» appears only for a commit whose `release-gate` passed. Keep CI green.

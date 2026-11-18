@@ -14,7 +14,7 @@ Works offline on every device; the shop computer keeps the database; Turso keeps
 | Lint | ESLint (JS + Vue) | `eslint.config.js` |
 | CI/CD | GitHub Actions: lint, tests (Node 22 + 24, Windows), Docker image → ghcr.io, release gate | `.github/workflows/ci.yml` |
 | Container | Docker (multi-stage, non-root, health check) | `Dockerfile`, `docker-compose.yml` |
-| AI debt checker (WhatsApp) | separate app, deployed by Netlify | `ai-tool/` (see its README) |
+| AI debt checker (WhatsApp) | separate app, its own repository | `wa-debt-checker` |
 
 ## Install on the shop computer
 See **docs/SETUP-WINDOWS.md** (step by step, nothing to install except Node.js). Phones: **docs/ANDROID.md**.
@@ -30,7 +30,6 @@ It goes through the program, so the history and the Turso copy get them too.
     npm run dev             # the screens with live reload on http://localhost:5173
     npm run lint            # code checks
     npm test                # all tests
-    npm run test:ai         # the AI tool's tests
     npm run build           # build the screens into dist/
 
 Where to change things:
