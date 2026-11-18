@@ -4,7 +4,7 @@
   - wallet: ✓ = used today (others are dimmed); click the balance to change it
   - client: الدين (from the day before) | الحساب (calculator) | النهائي = الدين + الحساب
   - wallet / debt / constant: the amount, typed in place
-  - the first field of the add row also searches the table; an exact duplicate is flagged and cannot be added
+  - the first field of the add row also searches the table (also in view-only mode); an exact duplicate is flagged and cannot be added
   - constant: click the amount to change it
   - click a name/number: its history day by day
   - 🗑: deleted items stay at the bottom (struck, red) with their history; "حذف نهائي" removes them and their log
@@ -68,6 +68,7 @@ const query = computed(() => (props.type === 'constant' ? '' : key(first.value))
 // an ACTIVE one with exactly this number / name: it cannot be added again
 const duplicate = computed(() => !!query.value && list.value.some(x => x.row.status === 'active' && key(x.name) === query.value));
 function add() {
+  if (!shop.canEdit) return;
   if (props.type !== 'constant' && !String(first.value).trim()) { firstEl.value?.focus(); return; }
   if (duplicate.value) { firstEl.value?.focus(); return; }
   if (second.value === '') { secondEl.value?.focus(); return; }
@@ -99,13 +100,13 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
     <form class="addrow" @submit.prevent="add">
       <div class="find" style="flex:1.2">
         <Icon v-if="type !== 'constant'" name="search" :size="16" class="find-ic" :class="{ ltr: type === 'wallet' }" />
-        <input v-if="type === 'wallet'" ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate }" :placeholder="T.first" inputmode="tel" dir="ltr" :disabled="!shop.canEdit" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
-        <input v-else ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate, pad: type !== 'constant' }" :placeholder="T.first" :disabled="!shop.canEdit" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
+        <input v-if="type === 'wallet'" ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate }" :placeholder="T.first" inputmode="tel" dir="ltr" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
+        <input v-else ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate, pad: type !== 'constant' }" :placeholder="T.first" :disabled="!shop.canEdit && type === 'constant'" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
       </div>
       <MoneyInput ref="secondEl" v-model="second" style="flex:1" :placeholder="T.second" :allow-negative="type === 'client' || type === 'wallet'" :disabled="!shop.canEdit" @enter="add" :aria-label="T.second" />
       <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit || duplicate" aria-label="إضافة"><Icon name="plus" /></button>
     </form>
-    <p v-if="duplicate" class="dup-msg" data-test="dup-msg">{{ type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل' }}</p>
+    <p v-if="duplicate && shop.canEdit" class="dup-msg" data-test="dup-msg">{{ type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل' }}</p>
 
     <div class="scroll">
       <table class="tbl">
