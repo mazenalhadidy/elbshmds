@@ -15,6 +15,8 @@ import { UserError } from './services/shop.js';
 export function createApp({ shop, cfg, sync = null, db = null, log = console }) {
   const app = express();
   const auth = createAuth(cfg.password);
+  const updateAuth = createAuth(cfg.updatePassword);
+  const appInfo = () => appInfoOf(cfg);
   const lock = createEditorLock();
   const devices = createDevices();
   let lastActivity = Date.now();                        // the updater waits for a quiet moment before restarting
@@ -74,8 +76,8 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
   // current data. ?rev=N -> "unchanged" (a few bytes) when nothing changed since N
   app.get('/api/state', (req, res) => {
     const c = cid(req); lock.claim(c);                   // keep the editor role alive
-    if (Number(req.query.rev) === shop.rev && shop.rev > 0) return res.json({ unchanged: true, rev: shop.rev, lock: lock.info(c) });
-    res.json({ ...shop.snapshot(), lock: lock.info(c) });
+    if (Number(req.query.rev) === shop.rev && shop.rev > 0) return res.json({ unchanged: true, rev: shop.rev, lock: lock.info(c), app: appInfo() });
+    res.json({ ...shop.snapshot(), lock: lock.info(c), app: appInfo() });
   });
   app.post('/api/lock', (req, res) => { const c = cid(req); lock.claim(c, !!req.body?.take); res.json({ ...shop.snapshot(), lock: lock.info(c) }); });
 
@@ -87,7 +89,7 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
     const ops = Array.isArray(req.body?.ops) ? req.body.ops.slice(0, 500) : [];
     const out = await shop.applyOps(ops, c);
     sync?.poke();
-    return { done: out.done, rejected: out.rejected, ...out.snapshot, lock: lock.info(c) };
+    return { done: out.done, rejected: out.rejected, ...out.snapshot, lock: lock.info(c), app: appInfo() };
   }));
 
   app.post('/api/close', (req, res) => send(res, async () => {
@@ -155,6 +157,16 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
     phoneUrls: lanUrls(cfg.port), devices: devices.list(), thisDevice: cid(req), lock: lock.info(cid(req)),
   })));
   app.get('/api/export', (req, res) => send(res, async () => { res.set('Content-Disposition', `attachment; filename="elbshmds-backup-${new Date().toISOString().slice(0, 10)}.json"`); return shop.exportAll(); }));
+  /* ----- «تحديث البرنامج»: the launcher prepares a new version; it is installed ONLY when someone presses the button
+     and types the update password (UPDATE_PASSWORD). The launcher reads the request file and switches safely. ----- */
+  app.post('/api/update', (req, res) => send(res, async () => {
+    if (!cfg.updatePassword) throw new UserError('كلمة مرور التحديث غير مضبوطة (UPDATE_PASSWORD في الإعدادات)', 400);
+    const e = updateAuth.check(req.ip, req.body?.password); if (e) throw new UserError(e.error, e.code);
+    const st = readJson(path.join(cfg.dataDir, 'update-status.json'));
+    if (!st?.ready) throw new UserError('لا يوجد تحديث جاهز', 409);
+    fs.writeFileSync(path.join(cfg.dataDir, 'update-request.json'), JSON.stringify({ sha: st.ready, at: new Date().toISOString(), device: cid(req) }));
+    return { ok: true };
+  }));
   app.post('/api/sync-now', (req, res) => send(res, async () => { await sync?.push(); return sync ? { ...sync.status } : { configured: false }; }));
 
   /* ----- the screens (built Vue app) ----- */
@@ -167,5 +179,13 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
   return app;
 }
 
+// the running version + a prepared update (read from the launcher's status file, at most once every 5 s)
+let infoAt = 0, info = null;
+function appInfoOf(cfg) {
+  if (Date.now() - infoAt < 5000) return info;
+  const st = readJson(path.join(cfg.dataDir, 'update-status.json'));
+  info = { sha: readVersion(cfg).sha, update: st?.ready ? { sha: st.ready, notes: st.notes || '', switching: !!st.switching } : null };
+  infoAt = Date.now(); return info;
+}
 function readJson(f) { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } }
 export function readVersion(cfg) { return readJson(path.join(cfg.codeDir, 'version.json')) || { sha: 'local', date: null }; }

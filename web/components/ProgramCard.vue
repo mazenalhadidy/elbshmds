@@ -1,4 +1,4 @@
-<!-- Version, automatic updates from GitHub, and the Turso online copy. -->
+<!-- Version, updates from GitHub (installed only from «تحديث متاح»), and the Turso online copy. -->
 <script setup>
 import { computed, ref } from 'vue';
 import { useShop } from '@/stores/shop.js';
@@ -22,7 +22,7 @@ async function syncNow() {
     <div class="card-h"><h2>البرنامج وقاعدة البيانات</h2></div>
     <div class="card-b small" v-if="sys">
       <div class="between"><span class="muted">الإصدار</span><span dir="ltr">{{ (sys.version.sha || 'local').slice(0, 7) }}</span></div>
-      <div class="between"><span class="muted">التحديث التلقائي</span><span>{{ sys.update ? (sys.update.message || '—') : 'غير مفعّل' }}</span></div>
+      <div class="between"><span class="muted">التحديث</span><span>{{ sys.update ? (sys.update.message || '—') : 'غير مفعّل' }}</span></div>
       <div v-if="sys.update?.checkedAt" class="between"><span class="muted">آخر فحص للتحديث</span><span>{{ when(sys.update.checkedAt) }}</span></div>
       <hr style="border:0;border-top:1px solid var(--line);margin:10px 0">
       <template v-if="sys.turso.configured">

@@ -7,7 +7,7 @@ import {
   dedupeRefs, totals, lines, imageInput, exampleLine, trainingText, pool,
   roleFromHistory, recordRoles, seedStats, rolesInput, decideRoles,
   linkGroups, transactions, statementCheckpoints, statementCp, mergeCheckpoints, equation, reconcile, expression, expressionHtml,
-  parseStatement, isTransaction, chatInput, cleanActions,
+  parseStatement, isTransaction, chatInput, cleanActions, keywordCheckpoints,
 } from './core.js';
 
 const $ = s => document.querySelector(s);
@@ -25,6 +25,7 @@ let cp = null, startIdx = -1, opening = 0;  // the start; where the analysis sta
 // what you told it (kept when it reads the chat again): your start, your opening, your fixes per message
 let pinnedStart = null, pinnedOpening = null, fixes = new Map(), talk = [];
 const imgCache = new Map();                 // message index -> the image answer (never pay twice for the same picture)
+const START_WORDS = ['بدايتنا', 'بداية الحساب', 'بداية حسابنا', 'اولنا', 'اول الحساب', 'اول حسابنا', 'هنبدا من', 'نبدا من'];
 const PICS = 'صور';                         // sender name of pasted / picked pictures (counted as the shop)
 const has = f => media.has(f);
 
@@ -218,7 +219,9 @@ async function findClosings(from) {
     const st = pics.find(p => p.i <= c.i && c.i - p.i <= 3 && Math.abs(p.stated - c.amount * (c.dir === 'shop_owes' ? -1 : 1)) < 1);
     return st ? { ...st, why: c.why || st.why } : c;                  // keep the AI's reason
   });
-  return mergeCheckpoints(found, typed, pics);
+  // safety net: «بدايتنا ١٢ الف» / «أولنا …» with a number, when the AI saw nothing at that message
+  const words = keywordCheckpoints(part.map(r => msgs[r.i]), START_WORDS).map(c => ({ ...c, why: 'بداية الحساب: ' + strip(msgs[c.i].text).slice(0, 60) }));
+  return mergeCheckpoints(found, typed, pics, words);
 }
 /** Make sure every row from `from` to the end is analyzed (pictures cached, nothing paid twice). */
 async function analyzeFrom(from, onStep) {
@@ -329,11 +332,11 @@ async function doImage(r, list, training) {
     }
   } catch (e) { fail(r, e); }
 }
-async function doText(batch, list, training) {
+async function doText(batch, list, training, { tier = 'fast', context = null } = {}) {
   if (!batch.length) return;
   const a = list.indexOf(batch[0]), b = list.indexOf(batch[batch.length - 1]);
   try {
-    const v = await ai('text', lines(list.slice(a, b + 1)), { training });
+    const v = await ai('text', lines(context || list.slice(a, b + 1)), { training, tier });
     const by = new Map(batch.map(r => [r.i, r]));
     for (const it of v?.items || []) {
       const r = by.get(Number(it.i)); if (!r) continue;
@@ -342,8 +345,9 @@ async function doText(batch, list, training) {
       if (it.dup_of != null && r.kind !== 'ignore') { r.why += ` (مكررة مع #${it.dup_of})`; r.kind = 'ignore'; r.ai.kind = 'ignore'; }
       by.delete(r.i);
     }
-    for (const r of by.values()) { r.state = 'done'; r.flag = true; r.why = 'لم يصل رد لهذه الرسالة، فراجعها.'; }
-  } catch (e) { batch.forEach(r => fail(r, e)); }
+    if (tier === 'strong') return;                     // a second reading that skipped a message keeps the first one
+    for (const r of by.values()) { r.state = 'done'; r.flag = true; r.why = 'لم يصل رد لهذه الرسالة.'; }
+  } catch (e) { if (tier !== 'strong') batch.forEach(r => fail(r, e)); }
 }
 /** Images first (several at once), then the text in batches (they see the image results to avoid double counting). */
 async function runAnalysis(list, onStep = () => {}) {
@@ -353,6 +357,13 @@ async function runAnalysis(list, onStep = () => {}) {
   const steps = imgs.length + batches.length;
   await pool(imgs, IMG_AT_ONCE, async r => { await doImage(r, list, training); onStep(steps); }, () => stopped);
   await pool(batches, TEXT_AT_ONCE, async b => { await doText(b, list, training); onStep(steps); }, () => stopped);
+  // not sure? the strong model reads those messages again with 5 messages around each — it decides, you don't
+  const unsure = texts.filter(r => r.state === 'done' && !r.fixed && (r.conf < 0.75 || (r.kind !== 'ignore' && !(r.amount > 0))));
+  const groups = []; for (let k = 0; k < unsure.length; k += 15) groups.push(unsure.slice(k, k + 15));
+  await pool(groups, TEXT_AT_ONCE, async g => {
+    const near = new Set(g.flatMap(r => { const k = list.indexOf(r); return list.slice(Math.max(0, k - 5), k + 6); }));
+    await doText(g, list, training, { tier: 'strong', context: list.filter(x => near.has(x)) });
+  }, () => stopped);
   dedupeRefs(list);
   linkGroups(list);
 }
@@ -498,23 +509,33 @@ function render() {
   $('#debt').textContent = fmt(Math.abs(c.debt)) + ' ج.م';
   $('#debtLabel').textContent = c.debt >= 0 ? 'على العميل' : 'للعميل عندنا';
   const names = s => s.join('، ') || '—', st = cp ?? (openIdx >= 0 ? { i: openIdx } : null);
-  $('#facts').textContent = `المحل: ${names(senders.filter(n => shop.has(n)))} · البداية: ${st && msgs[st.i] ? msgs[st.i].ts : 'أول المحادثة'}${c.rev ? ` · للمراجعة: ${c.rev}` : ''}`;
-  const needs = r => (r.flag && !r.ok) || r.state === 'error';
-  const vis = rows.filter(r => !r.sys && !r.start && (showAll || r.kind !== 'ignore' || needs(r) || r.fixed || r.state !== 'done'));
+  $('#facts').textContent = `المحل: ${names(senders.filter(n => shop.has(n)))} · البداية: ${st && msgs[st.i] ? msgs[st.i].ts : 'أول المحادثة'}`;
+  const vis = rows.filter(r => !r.sys && !r.start && (showAll || (r.kind !== 'ignore' && r.partOf == null) || r.fixed || r.state !== 'done'));
   $('#list').innerHTML = vis.length ? vis.map(card).join('') : '<p class="note">لا توجد معاملات.</p>';
 }
+/** What it understood, in one line: «+5,000 أرسلنا له» / «−8,000 استلمنا منه» / «ليست من الحساب». */
+const understood = r => {
+  if (r.state === 'pending') return '…';
+  if (r.state === 'error') return r.why;
+  if (r.start) return 'بداية الحساب';
+  if (r.partOf != null) return `ضمن #${r.partOf}`;
+  if (r.kind === 'ignore' || !(r.amount > 0)) return 'ليست من الحساب';
+  return { n: (r.kind === 'sent' ? '+' : '−') + fmt(r.amount), t: KIND[r.kind] };
+};
+// the sign stays in front of its number inside Arabic text
+const gotHtml = g => (typeof g === 'string' ? esc(g) : `<bdi dir="ltr">${g.n}</bdi> ${esc(g.t)}`);
+let editing = null;                                  // the message opened for a fix (tap it)
 function card(r) {
-  const pend = r.state === 'pending';
-  const seg = ['sent', 'received', 'ignore'].map(k => `<button data-k="${k}" aria-pressed="${r.kind === k}" ${pend ? 'disabled' : ''}>${KIND[k]}</button>`).join('');
-  const meta = r.fixed ? `<em>${r.why ? ' · ' : ''}صحّحتَه</em>` : !pend && r.state === 'done' ? ` <em>· ${Math.round(r.conf * 100)}%</em>` : '';
-  return `<article class="row ${r.flag && !r.ok ? 'flag' : ''}" data-i="${r.i}">
+  const open = editing === r.i && r.state !== 'pending';
+  const seg = ['sent', 'received', 'ignore'].map(k => `<button data-k="${k}" aria-pressed="${r.kind === k}">${KIND[k]}</button>`).join('');
+  const cls = r.state === 'error' ? 'flag' : r.kind === 'sent' ? 'is-sent' : r.kind === 'received' ? 'is-rec' : '';
+  return `<article class="row ${cls}${open ? ' open' : ''}" data-i="${r.i}" data-act="edit">
 <header><span class="who ${r.side}">${r.side === 'shop' ? 'المحل' : 'العميل'} · ${esc(r.sender)}</span><time>#${r.i} · ${esc(r.ts)}</time></header>
 ${r.url ? `<button class="thumb" data-act="zoom" aria-label="كبّر"><img src="${r.url}" alt="صورة"></button>` : r.img ? '<p class="note">صورة…</p>' : ''}
 ${r.text ? `<p class="msg">${esc(r.text)}</p>` : ''}
-<div class="ai">${pend ? '…' : esc(r.why)}${meta}</div>
-<div class="ctl"><div class="seg">${seg}</div><input class="amt" inputmode="decimal" value="${r.amount ?? ''}" placeholder="المبلغ" aria-label="المبلغ" ${pend ? 'disabled' : ''}></div>
-${r.tag ? `<div class="bal">${esc(r.tag)}</div>` : ''}
-${(r.flag && !r.ok && !pend) || r.state === 'error' ? `<div class="acts">${r.flag && !r.ok && !pend ? '<button class="ghost" data-act="ok">صحيح ✓</button>' : ''}${r.state === 'error' ? '<button class="ghost" data-act="retry">أعِد</button>' : ''}</div>` : ''}
+<div class="got"><b>${gotHtml(understood(r))}</b>${r.fixed ? ' <em>· صحّحتَه</em>' : ''}${r.tag ? ` <em>· ${esc(r.tag)}</em>` : ''}</div>
+${open ? `<div class="ai">${esc(r.why)}</div><div class="ctl"><div class="seg">${seg}</div><input class="amt" inputmode="decimal" value="${r.amount ?? ''}" placeholder="المبلغ" aria-label="المبلغ"></div>` : ''}
+${r.state === 'error' ? '<div class="acts"><button class="ghost" data-act="retry">أعِد</button></div>' : ''}
 </article>`;
 }
 const rowOf = el => { const a = el.closest('[data-i]'); return a && rows.find(r => r.i === Number(a.dataset.i)); };
@@ -522,15 +543,16 @@ $('#list').addEventListener('click', async e => {
   const r = rowOf(e.target); if (!r) return;
   const k = e.target.closest('[data-k]');
   if (k) { if (r.kind !== k.dataset.k) applyFix(r.i, k.dataset.k, r.amount); render(); return; }
+  if (e.target.closest('.ctl')) return;
   const act = e.target.closest('[data-act]')?.dataset.act;
-  if (act === 'zoom') { $('#zoom img').src = r.url; $('#zoom').style.display = 'flex'; }
-  if (act === 'ok') { r.ok = true; render(); }
+  if (act === 'zoom') { $('#zoom img').src = r.url; $('#zoom').style.display = 'flex'; return; }
   if (act === 'retry' && !busy) {
     r.state = 'pending'; render();
     const training = trainingText(settings, examples);
     if (r.img) await doImage(r, rows, training); else await doText([r], rows, training);
-    render();
+    render(); return;
   }
+  if (act === 'edit') { editing = editing === r.i ? null : r.i; render(); }
 });
 $('#list').addEventListener('change', e => {
   if (!e.target.classList.contains('amt')) return; const r = rowOf(e.target); if (!r) return;

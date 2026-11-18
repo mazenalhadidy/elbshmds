@@ -43,14 +43,15 @@ try {
   const shutdown = async sig => {
     if (stopping) return; stopping = true;
     console.log(`${sig}: stopping…`);
-    const force = setTimeout(() => process.exit(0), 10000); force.unref();
-    server.close();
+    const force = setTimeout(() => process.exit(0), 15000); force.unref();
+    await new Promise(r => { server.close(r); server.closeIdleConnections?.(); setTimeout(r, 3000); });   // requests in progress finish
     sync.stop();
     try { await Promise.race([sync.push(), new Promise(r => setTimeout(r, 5000))]); } catch { /* next start retries */ }
     try { local.close(); } catch { /* already closed */ }
     process.exit(0);
   };
   process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('message', m => { if (m?.t === 'shutdown') shutdown('update'); });   // the launcher (Windows has no SIGTERM)
   process.on('SIGINT', () => shutdown('SIGINT'));
 } catch (e) {
   console.error('\nSTART-UP FAILED: ' + e.message);

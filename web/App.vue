@@ -8,6 +8,7 @@ import SetupScreen from './components/SetupScreen.vue';
 import EditBar from './components/EditBar.vue';
 import StatusDot from './components/StatusDot.vue';
 import Toasts from './components/Toasts.vue';
+import UpdateButton from './components/UpdateButton.vue';
 const shop = useShop();
 // a tab is highlighted on its page and on the pages under it (/settle/deficits -> «التصفية»)
 const route = useRoute();
@@ -26,6 +27,7 @@ const isOn = p => route.path === p.path || (p.path !== '/' && route.path.startsW
           <RouterLink v-for="p in pages" :key="p.name" :to="p.path" class="tab" active-class="" :class="{ on: isOn(p) }">{{ p.label }}</RouterLink>
         </nav>
         <div class="end">
+          <UpdateButton />
           <span v-if="!shop.lock.editor && !shop.editing" class="viewonly">مشاهدة فقط <button class="btn sm" @click="shop.takeOver()">تولّي التعديل</button></span>
         </div>
       </div>
@@ -41,9 +43,9 @@ const isOn = p => route.path === p.path || (p.path !== '/' && route.path.startsW
 </template>
 <style scoped>
 .top { position: sticky; top: 0; z-index: 8; background: var(--surface); border-bottom: 1px solid var(--line); }
-.bar { max-width: var(--maxw); margin: 0 auto; min-height: 60px; padding: 0 16px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
+.bar { max-width: var(--maxw); margin: 0 auto; min-height: 60px; padding: 8px 16px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 17px; white-space: nowrap; }
-.end { display: flex; justify-content: flex-end; }
+.end { display: flex; justify-content: flex-end; align-items: center; gap: 8px; flex-wrap: wrap; }
 nav { display: flex; gap: 4px; justify-content: center; }
 .tab { text-decoration: none; color: var(--muted); padding: 8px 16px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
 .tab:hover { color: var(--fg); background: var(--surface-2); }

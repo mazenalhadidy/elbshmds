@@ -32,6 +32,7 @@ export function getConfig() {
     dataDir,
     port: Number(e.PORT) || 3000,
     password: e.APP_PASSWORD || '',
+    updatePassword: e.UPDATE_PASSWORD || '',                            // only for «تحديث البرنامج» (set by the owner)
     // main database: a file on THIS computer (always available, works without internet)
     dbFile: path.join(dataDir, 'shop-v3.db'),
     // Turso: an online copy, updated in the background whenever there is internet

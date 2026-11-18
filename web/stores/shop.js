@@ -25,6 +25,7 @@ export const useShop = defineStore('shop', {
     lock: { editor: true, held: false },
     connected: true,              // could we reach the shop computer last time?
     lastContactAt: null,
+    app: null,                    // { sha: running version, update: a prepared version waiting for «تحديث متاح» }
     system: null,                 // management info (Turso, devices, version) — refreshed now and then
     syncing: false,
     view: null,                   // { items, book, summary, editing } — what the screens show
@@ -132,6 +133,11 @@ export const useShop = defineStore('shop', {
         if (!this.connected && this.loggedIn) useToasts().show(batch.length ? `عاد الاتصال — تم إرسال ${batch.length} تغيير` : 'عاد الاتصال بجهاز المحل');
         this.connected = true; this.lastContactAt = Date.now();
         if (!r.unchanged) this.adopt(r); else this.lock = r.lock;
+        if (r.app) {
+          // the shop computer now runs a new version: load its screens (unsent changes are kept on this device)
+          if (this.app?.sha && r.app.sha !== this.app.sha && !this.pending.length && typeof location !== 'undefined' && import.meta.env?.MODE !== 'test') location.reload();
+          this.app = r.app;
+        }
         if (batch.length) {
           const refused = r.rejected || [];
           for (const x of refused) { const op = batch.find(p => p.opId === x.opId); if (op) this.failed.push({ op, error: x.error, at: new Date().toISOString() }); }

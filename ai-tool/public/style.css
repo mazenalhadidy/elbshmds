@@ -114,3 +114,12 @@ label.file.small{min-height:52px;margin-top:8px}
 #step1 .again{display:none;width:100%}
 #step1.loaded .again{display:block}
 #step1.loaded label.file{display:none}
+/* the list is for checking: one line per message says what it understood; tap one to fix it */
+.row{cursor:pointer}
+.row.open{cursor:default;border-color:var(--v)}
+.row.is-sent{box-shadow:inset -4px 0 0 var(--v)}
+.row.is-rec{box-shadow:inset -4px 0 0 var(--rc)}
+.got{font-size:15px;margin-top:4px}
+.got b{font-variant-numeric:tabular-nums}
+.got em{color:var(--mute);font-style:normal;font-size:13px}
+.row .ai{margin-top:8px}
