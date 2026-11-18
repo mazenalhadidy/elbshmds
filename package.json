@@ -19,7 +19,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
+    "@libsql/client": "^0.18.0",
     "compression": "1.8.2",
     "express": "^4.21.0",
     "qrcode": "^1.5.4"
