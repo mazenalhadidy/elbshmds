@@ -1,4 +1,5 @@
 /* The addresses of this computer on the shop network (for phones) and the list of connected devices. */
+import fs from 'node:fs';
 import os from 'node:os';
 
 export function lanUrls(port) {
@@ -11,9 +12,15 @@ export function lanUrls(port) {
 }
 
 /** Devices that talked to the server recently (in memory). */
-export function createDevices() {
+export function createDevices({ file = null } = {}) {
   const map = new Map();
+  // disconnected devices: id -> when. A login made before that time no longer works (the device logs in again).
+  let kicked = {};
+  try { if (file) kicked = JSON.parse(fs.readFileSync(file, 'utf8')) || {}; } catch { kicked = {}; }
+  const save = () => { try { if (file) fs.writeFileSync(file, JSON.stringify(kicked)); } catch { /* kept in memory */ } };
   return {
+    kick(id) { kicked[id] = Date.now(); map.delete(id); save(); },
+    kickedAt: id => kicked[id] || 0,
     seen(id, { name, ip, ua }) {
       if (!id) return;
       map.set(id, { id, name: name || guessName(ua), ip: String(ip || '').replace(/^::ffff:/, ''), lastSeen: Date.now() });

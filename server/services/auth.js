@@ -20,7 +20,8 @@ export function createAuth(password, { tokenDays = 30 } = {}) {
   }
   const makeToken = () => { const exp = String(Date.now() + tokenDays * 864e5); return exp + '.' + sign(exp); };
   const validToken = t => { const [exp, sig] = String(t || '').split('.'); return !!sig && same(sign(exp), sig) && Date.now() < Number(exp); };
-  return { check, makeToken, validToken };
+  const issuedAt = t => Number(String(t || '').split('.')[0]) - tokenDays * 864e5;   // when this login happened
+  return { check, makeToken, validToken, issuedAt };
 }
 
 /* Only one device edits at a time; the others can still look. The role lapses after 45 s without contact. */
@@ -31,5 +32,6 @@ export function createEditorLock() {
     info: id => ({ editor: held() && lock.id === id, held: held(), holder: held() ? lock.id : null }),
     /** Become the editor if nobody else is (or `take` = take over). Returns true if this device is the editor. */
     claim(id, take = false) { if (!id) return false; if (!held() || lock.id === id || take) lock = { id, seen: Date.now() }; return lock.id === id; },
+    release(id) { if (lock.id === id) lock = { id: null, seen: 0 }; },
   };
 }

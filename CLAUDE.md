@@ -45,6 +45,8 @@ described there; extend it. Every change is small and in the existing style.
   value saves the difference as today's change. A new client/debt starts with change 0. Sorted by the balance
   (largest first), zero balances at the bottom.
 - Delete buttons: red outline icons (never filled), with a confirmation or «تراجع».
+- الإدارة: الثوابت is a normal table right under النقدية والمكن. Every other device in «الهواتف والأجهزة المتصلة» has a
+  red «فصل» (password): its login stops at once (`data/disconnected-devices.json`); it can log in again with the password.
 - اليومية: letters typed after the amount jump to the name field.
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 

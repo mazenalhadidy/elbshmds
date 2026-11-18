@@ -18,7 +18,7 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
   const updateAuth = createAuth(cfg.updatePassword);
   const appInfo = () => appInfoOf(cfg);
   const lock = createEditorLock();
-  const devices = createDevices();
+  const devices = createDevices({ file: path.join(cfg.dataDir, 'disconnected-devices.json') });
   let lastActivity = Date.now();                        // the updater waits for a quiet moment before restarting
 
   const cid = req => req.get('x-client-id') || '';
@@ -66,7 +66,9 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
 
   /* ----- everything below needs a login ----- */
   app.use('/api', (req, res, next) => {
-    if (!auth.validToken((req.get('authorization') || '').replace(/^Bearer /, ''))) return res.status(401).json({ error: 'سجّل الدخول' });
+    const token = (req.get('authorization') || '').replace(/^Bearer /, '');
+    if (!auth.validToken(token)) return res.status(401).json({ error: 'سجّل الدخول' });
+    if (auth.issuedAt(token) <= devices.kickedAt(cid(req))) return res.status(401).json({ error: 'فُصل هذا الجهاز — سجّل الدخول من جديد' });
     res.set('Cache-Control', 'no-store');
     devices.seen(cid(req), { name: req.get('x-device-name'), ip: req.ip, ua: req.get('user-agent') });
     if (req.method !== 'GET') lastActivity = Date.now();
@@ -166,6 +168,13 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
     if (!st?.ready) throw new UserError('لا يوجد تحديث جاهز', 409);
     fs.writeFileSync(path.join(cfg.dataDir, 'update-request.json'), JSON.stringify({ sha: st.ready, at: new Date().toISOString(), device: cid(req) }));
     return { ok: true };
+  }));
+  // disconnect another device (password): its login stops working at once; it can log in again with the password
+  app.post('/api/devices/:id/disconnect', (req, res) => send(res, async () => {
+    needPassword(req);
+    if (req.params.id === cid(req)) throw new UserError('لا يمكن فصل هذا الجهاز نفسه', 400);
+    devices.kick(req.params.id); lock.release(req.params.id);
+    return { devices: devices.list() };
   }));
   app.post('/api/sync-now', (req, res) => send(res, async () => { await sync?.push(); return sync ? { ...sync.status } : { configured: false }; }));
 

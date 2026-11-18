@@ -134,3 +134,25 @@ describe('edge cases', () => {
     s.close();
   });
 });
+
+describe('devices', () => {
+  it('disconnecting a device (password) logs it out at once; it can log in again; never this device itself', async () => {
+    const s = await boot();
+    const login = async () => (await (await fetch(s.base + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'pw' }) })).json()).token;
+    const as = (token, cid) => (m, u, b) => fetch(s.base + '/api' + u, { method: m, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'X-Client-Id': cid }, body: b ? JSON.stringify(b) : undefined }).then(async r => ({ status: r.status, body: await r.json() }));
+    await new Promise(r => setTimeout(r, 5));
+    let phone = as(await login(), 'phone');
+    expect((await phone('GET', '/state')).status).toBe(200);
+    expect((await s.call('POST', '/devices/phone/disconnect', { password: 'bad' })).status).toBe(401);
+    expect((await s.call('POST', '/devices/A/disconnect', { password: 'pw' })).status).toBe(400);          // not this device
+    const r = await s.call('POST', '/devices/phone/disconnect', { password: 'pw' });
+    expect(r.status).toBe(200); expect(r.body.devices.some(d => d.id === 'phone')).toBe(false);
+    const out = await phone('GET', '/state');
+    expect(out.status).toBe(401); expect(out.body.error).toMatch(/فُصل/);
+    expect((await s.call('GET', '/state')).status).toBe(200);                                               // the others go on
+    await new Promise(r => setTimeout(r, 5));
+    phone = as(await login(), 'phone');                                                                      // logging in again works
+    expect((await phone('GET', '/state')).status).toBe(200);
+    s.close();
+  });
+});
