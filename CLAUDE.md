@@ -12,6 +12,9 @@ described there; extend it. Every change is small and in the existing style.
 - **Never push to GitHub** unless he asks in that message. Commit on the working branch, then give him a zip:
   `git archive --format=zip --prefix=elbshmds/ -o <scratchpad>/elbshmds-vX.Y.zip HEAD`
   (and `HEAD:ai-tool` with prefix `wa-debt-checker/` when the AI tool changed).
+- **The two zips are ALWAYS the last thing of every final reply**: the shop zip (above) AND the ready AI zip
+  (`npm --prefix ai-tool run package` → `ai-tool/release/wa-debt-checker.zip`, copied to `<scratchpad>/wa-debt-checker-READY.zip`),
+  even when only one app changed.
 - **Screenshots**: none while working. At the END of the reply, send the screenshots you took while testing
   (phone 390 px first). Send others only when he asks.
 - Ask only when a choice really changes the result; otherwise decide and say so briefly.
@@ -33,6 +36,9 @@ described there; extend it. Every change is small and in the existing style.
   never inside a number, and a new line starts with its sign (`+53,000`).
 - Tables (e.g. العجوزات): right-to-left, titles on ONE line, ONE thick row per record, must fit a 360 px phone.
 - «التفاصيل» toggles are a small round arrow (no text).
+- الحسابات: العملاء on the right, المحافظ on the left. The first field of each table also searches it
+  (wallet: any number containing the typed digits; names: Arabic-insensitive); an exact ACTIVE duplicate is refused
+  («هذا الرقم موجود بالفعل» / «هذا الاسم موجود بالفعل»). Only clients have the calculator; ديون are typed directly.
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 
 ## Accounting decisions (do not change without asking)

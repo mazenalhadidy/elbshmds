@@ -7,13 +7,13 @@
    - item   : something with a balance that lives across days:
                 wallet   (محفظة)  -> its balance is typed by hand
                 client   (عميل)    -> debt the client owes the shop
-                debt     (دين على المحل) -> what the shop owes someone
+                debt     (ديون)    -> what the shop owes someone (typed)
                 constant (ثابت)    -> fixed amount subtracted every day
    - book   : everything of ONE day: the day itself, one "row" per item,
               the input/output/sale entries and the manual adjustments.
    - row    : an item's numbers on a given day.
-                wallet/constant: value (typed)
-                client/debt    : opening (from the day before) + calculator text = final
+                wallet/debt/constant: value (typed)
+                client             : opening (from the day before) + calculator text = final
    - op     : one change, e.g. { t:'addEntry', id, kind:'sale', amount:500 }.
               reduce(state, op) applies it. Same op + same state = same result.
 
@@ -36,7 +36,9 @@ export const clone = o => JSON.parse(JSON.stringify(o));
 
 export const ITEM_TYPES = { wallet: 'محفظة', client: 'عميل', debt: 'دين على المحل', constant: 'ثابت' };
 export const ENTRY_KINDS = { input: 'المدخلات', output: 'المخرجات', sale: 'المبيعات' };
-const hasCalc = type => type === 'client' || type === 'debt';   // items whose day value comes from the calculator
+// items whose day value comes from the calculator: clients only. Shop debts are typed directly like wallets
+// (their stored value already holds the final amount, also for days saved when debts still had a calculator).
+const hasCalc = type => type === 'client';
 
 /* ---------------------------------------------------------------------
    Building blocks
@@ -60,6 +62,7 @@ export function rowFinal(row, type) {
 
 const amountOf = (v, msg = 'القيمة غير صحيحة') => { const n = parseAmount(v); if (!Number.isFinite(n)) fail(msg); return r2(n); };
 const positive = (v, msg = 'القيمة غير صحيحة') => { const n = amountOf(v, msg); if (!(n > 0)) fail(msg); return n; };
+const positiveOrZero = (v, msg = 'القيمة غير صحيحة') => { const n = amountOf(v, msg); if (n < 0) fail(msg); return n; };
 const text = s => String(s ?? '').trim();
 
 /* ---------------------------------------------------------------------
@@ -201,7 +204,7 @@ export function reduce(state, op) {
       if (items[op.id]) return;                                        // repeated op
       const name = op.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);   // wallet numbers are stored with 0-9
       if (!name && op.type !== 'constant') fail(op.type === 'wallet' ? 'اكتب رقم المحفظة' : 'اكتب الاسم');
-      const amount = op.type === 'constant' ? positive(op.amount) : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
+      const amount = op.type === 'constant' ? positive(op.amount) : op.type === 'debt' ? positiveOrZero(op.amount, 'اكتب المبلغ') : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
       if (op.type !== 'constant') noDuplicate(op.type, name);
       items[op.id] = { id: op.id, type: op.type, name: name || ITEM_TYPES.constant, purged: false, createdAt: ts };
       book.rows[op.id] = hasCalc(op.type)
@@ -215,11 +218,11 @@ export function reduce(state, op) {
       if (it.type !== 'constant' && book.rows[op.id]?.status === 'active') noDuplicate(it.type, name, op.id);
       it.name = name; return;
     }
-    case 'setValue': {                                                  // wallet balance / constant amount, typed by hand
+    case 'setValue': {                                                  // wallet balance / debt / constant amount, typed by hand
       lateRefuse();
       const it = item(op.id), r = row(op.id);
       if (hasCalc(it.type)) fail('بيانات غير صحيحة');
-      r.value = it.type === 'constant' ? positive(op.value) : amountOf(op.value); r.changed = true; return;
+      r.value = it.type === 'constant' ? positive(op.value) : it.type === 'debt' ? positiveOrZero(op.value) : amountOf(op.value); r.changed = true; return;
     }
     case 'setActive': { item(op.id); const r = row(op.id); r.active = !!op.active; r.achanged = true; return; }
     case 'setCalc': {                                                   // the calculator of a client / shop debt

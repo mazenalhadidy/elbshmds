@@ -26,6 +26,17 @@ describe('engine', () => {
     expect(s.diff).toBe(0);                                      // virtual - real
   });
 
+  it('debts are typed directly (no calculator) and carry to the next day', () => {
+    const st = st0(0);
+    go(st, { t: 'addItem', id: 'd1', type: 'debt', name: 'تاجر', amount: 200 });
+    expect(() => go(st, { t: 'setCalc', id: 'd1', calc: '+50' })).toThrow();
+    go(st, { t: 'setValue', id: 'd1', value: 350 });
+    expect(summarize(st.book, st.items).debts).toBe(350);
+    expect(() => go(st, { t: 'setValue', id: 'd1', value: -5 })).toThrow();
+    const next = nextBook(st.book, st.items, 'd2');
+    expect(next.rows.d1.value).toBe(350);
+  });
+
   it('client calculator: final = opening + result, totals use the final', () => {
     const st = st0(0);
     go(st, { t: 'addItem', id: 'c1', type: 'client', name: 'أحمد', amount: 1000 });

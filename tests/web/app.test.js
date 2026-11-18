@@ -57,10 +57,19 @@ describe('screens', () => {
 
     // wallets & clients page
     await router.push('/accounts'); await flushPromises();
-    const [wForm, cForm] = w.findAll('form.addrow');
+    const [cForm, wForm] = w.findAll('form.addrow');               // clients on the right, wallets on the left
     await wForm.find('input:not(.money)').setValue('01001234567'); await type(wForm.find('input.money'), '9000'); await press(wForm.find('input.money'), 'Enter'); await flushPromises();
     await cForm.find('input:not(.money)').setValue('أحمد'); await type(cForm.find('input.money'), '1000'); await press(cForm.find('input.money'), 'Enter'); await flushPromises();
     expect(w.text()).toContain('٩٬٠٠٠'); expect(w.text()).toContain('أحمد');
+    // the first field searches; an exact active duplicate is refused
+    await wForm.find('input:not(.money)').setValue('1234'); await flushPromises();
+    expect(w.find('[data-test=dup-msg]').exists()).toBe(false);
+    expect(wForm.element.closest('section').textContent).toContain('٠١٠٠١٢٣٤٥٦٧');
+    await wForm.find('input:not(.money)').setValue('0100 123 4567'); await flushPromises();
+    expect(w.find('[data-test=dup-msg]').text()).toBe('هذا الرقم موجود بالفعل');
+    await cForm.find('input:not(.money)').setValue('احمد'); await flushPromises();
+    expect(w.findAll('[data-test=dup-msg]').length).toBe(2);
+    await wForm.find('input:not(.money)').setValue(''); await cForm.find('input:not(.money)').setValue(''); await flushPromises();
     // the calculator: 746 + 9472 = , then إنهاء
     await w.find('.calc-chip').trigger('click'); await flushPromises();
     const area = document.querySelector('textarea.lines');

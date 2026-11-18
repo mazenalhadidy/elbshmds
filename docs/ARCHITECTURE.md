@@ -13,7 +13,7 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 - التصفية الحقيقية = wallets + clients + cash + network − shop debts − constants ± manual adjustments
 - العجز/الزيادة = الافتراضي − الحقيقي (positive = عجز, negative = زيادة)
 - Closing a day: the real total becomes the next day's تصفية البارحة. Wallets, constants and shop debts carry over
-  (clients and debts carry their final value). Inputs/outputs/sales, cash, network, adjustments and notes start empty.
+  (clients carry their final value; only clients have the calculator, debts are typed). Inputs/outputs/sales, cash, network, adjustments and notes start empty.
 - Editing a saved day: the change flows to every later day (in the order they were worked), unless a later day changed that value itself.
 
 ## العجوزات (shared/deficits.js)

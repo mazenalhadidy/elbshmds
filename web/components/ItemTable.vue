@@ -2,7 +2,9 @@
   One table for: wallets (المحافظ), clients (العملاء), shop debts (الديون), constants (الثوابت).
   - add: the two fields on top, Enter adds, the cursor goes back to the first field
   - wallet: ✓ = used today (others are dimmed); click the balance to change it
-  - client / debt: الدين (from the day before) | الحساب (calculator) | النهائي = الدين + الحساب
+  - client: الدين (from the day before) | الحساب (calculator) | النهائي = الدين + الحساب
+  - wallet / debt / constant: the amount, typed in place
+  - the first field of the add row also searches the table; an exact duplicate is flagged and cannot be added
   - constant: click the amount to change it
   - click a name/number: its history day by day
   - 🗑: deleted items stay at the bottom (struck, red) with their history; "حذف نهائي" removes them and their log
@@ -12,9 +14,8 @@
 import { ref, computed, nextTick } from 'vue';
 import { useShop } from '@/stores/shop.js';
 import { uid } from '@/lib/api.js';
-import { fmt, toArabicDigits } from '@shared/money.js';
+import { fmt, toArabicDigits, toLatinDigits, evalCalc } from '@shared/money.js';
 import { rowFinal } from '@shared/engine.js';
-import { evalCalc } from '@shared/money.js';
 import MoneyInput from './MoneyInput.vue';
 import Money from './Money.vue';
 import Icon from './Icon.vue';
@@ -28,7 +29,7 @@ const props = defineProps({
   bare: Boolean,                                    // inside a folded card (no own card frame)
 });
 const shop = useShop();
-const isCalc = computed(() => props.type === 'client' || props.type === 'debt');
+const isCalc = computed(() => props.type === 'client');
 const T = {
   wallet: { first: 'رقم المحفظة', second: 'الرصيد', firstMode: 'tel', empty: 'لا توجد محافظ' },
   client: { first: 'اسم العميل', second: 'الدين عليه', empty: 'لا يوجد عملاء' },
@@ -45,16 +46,30 @@ const list = computed(() => {
     if (!it || it.type !== props.type || (it.purged && !shop.view?.editing)) continue;
     out.push({ id, name: props.type === 'wallet' ? toArabicDigits(it.name) : it.name, row, final: rowFinal(row, it.type), result: isCalc.value ? evalCalc(row.calc) : 0 });
   }
+  const q = query.value;
+  if (q) return out.filter(x => key(x.name).includes(q)).sort((a, b) => (a.row.status === 'deleted') - (b.row.status === 'deleted') || a.name.localeCompare(b.name, 'ar'));
   const rank = x => (x.row.status === 'deleted' ? 3 : props.type === 'wallet' ? (x.row.active ? 0 : 1) : x.final === 0 && isCalc.value ? 2 : 0);
   return out.sort((a, b) => rank(a) - rank(b) || Math.abs(b.final) - Math.abs(a.final) || a.name.localeCompare(b.name, 'ar'));
 });
-const total = computed(() => list.value.filter(x => x.row.status === 'active').reduce((a, x) => a + x.final, 0));
+// the total never follows the search: it is always the whole table
+const total = computed(() => {
+  const book = shop.book; if (!book) return 0;
+  return Object.entries(book.rows).filter(([id, r]) => shop.items[id]?.type === props.type && !shop.items[id].purged && r.status === 'active').reduce((a, [, r]) => a + rowFinal(r, props.type), 0);
+});
 defineExpose({ total });
 
-/* ----- add ----- */
+/* ----- add + search: the first field filters the table as you type ----- */
 const first = ref(''), second = ref(''), firstEl = ref(null), secondEl = ref(null);
+// wallets: the digits only (spaces, dashes and Arabic digits don't matter); names: أ/إ/آ=ا, ة=ه, ى=ي
+const key = s => (props.type === 'wallet'
+  ? toLatinDigits(s).replace(/\D/g, '')
+  : String(s || '').trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\u064B-\u0652\u0640]/g, '').replace(/\s+/g, ' '));
+const query = computed(() => (props.type === 'constant' ? '' : key(first.value)));
+// an ACTIVE one with exactly this number / name: it cannot be added again
+const duplicate = computed(() => !!query.value && list.value.some(x => x.row.status === 'active' && key(x.name) === query.value));
 function add() {
   if (props.type !== 'constant' && !String(first.value).trim()) { firstEl.value?.focus(); return; }
+  if (duplicate.value) { firstEl.value?.focus(); return; }
   if (second.value === '') { secondEl.value?.focus(); return; }
   if (shop.dispatch({ t: 'addItem', id: uid(), type: props.type, name: first.value, amount: second.value })) {
     first.value = ''; second.value = '';
@@ -82,11 +97,15 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
     <div v-if="!bare && title" class="card-h"><h2>{{ title }}</h2></div>
 
     <form class="addrow" @submit.prevent="add">
-      <input v-if="type === 'wallet'" ref="firstEl" v-model="first" class="input" style="flex:1.2" :placeholder="T.first" inputmode="tel" dir="ltr" :disabled="!shop.canEdit" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" />
-      <input v-else ref="firstEl" v-model="first" class="input" style="flex:1.2" :placeholder="T.first" :disabled="!shop.canEdit" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" />
+      <div class="find" style="flex:1.2">
+        <Icon v-if="type !== 'constant'" name="search" :size="16" class="find-ic" :class="{ ltr: type === 'wallet' }" />
+        <input v-if="type === 'wallet'" ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate }" :placeholder="T.first" inputmode="tel" dir="ltr" :disabled="!shop.canEdit" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
+        <input v-else ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate, pad: type !== 'constant' }" :placeholder="T.first" :disabled="!shop.canEdit" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
+      </div>
       <MoneyInput ref="secondEl" v-model="second" style="flex:1" :placeholder="T.second" :allow-negative="type === 'client' || type === 'wallet'" :disabled="!shop.canEdit" @enter="add" :aria-label="T.second" />
-      <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit" aria-label="إضافة"><Icon name="plus" /></button>
+      <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit || duplicate" aria-label="إضافة"><Icon name="plus" /></button>
     </form>
+    <p v-if="duplicate" class="dup-msg" data-test="dup-msg">{{ type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل' }}</p>
 
     <div class="scroll">
       <table class="tbl">
@@ -129,7 +148,7 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
           </tr>
         </tbody>
       </table>
-      <p v-if="!list.length" class="empty">{{ T.empty }}</p>
+      <p v-if="!list.length" class="empty">{{ query ? 'لا توجد نتيجة' : T.empty }}</p>
     </div>
     <div class="total"><span>الإجمالي</span><span class="num">{{ fmt(total) }}</span></div>
 
@@ -140,6 +159,14 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
 </template>
 
 <style scoped>
+.find { position: relative; min-width: 0; }
+.find .input { width: 100%; }
+.find-ic { position: absolute; top: 50%; transform: translateY(-50%); inset-inline-start: 10px; color: var(--faint); pointer-events: none; }
+.find input[dir=ltr] { padding-left: 32px; }            /* wallet numbers are written left-to-right: icon on the left */
+.find-ic.ltr { inset-inline-start: auto; left: 10px; }
+.find .input.pad { padding-inline-start: 32px; }
+.find .input.dup { border-color: var(--neg); box-shadow: 0 0 0 3px var(--neg-soft); }
+.dup-msg { margin: 0; padding: 6px 14px; background: var(--neg-soft); color: var(--neg); font-size: 13px; border-bottom: 1px solid var(--line); }
 .narrow-only { display: none; }
 @media (max-width: 600px) { .wide-only { display: none; } .narrow-only { display: block; } }
 .calc-chip { font-size: 13px; min-width: 64px; text-align: center; border: 1px dashed var(--line-strong); color: var(--muted); }

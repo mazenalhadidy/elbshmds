@@ -9,7 +9,7 @@ const props = defineProps({ id: String, name: String, type: String });
 const emit = defineEmits(['close']);
 const shop = useShop();
 const rows = ref(null), err = ref(''), newName = ref(props.name), renaming = ref(false);
-const isCalc = props.type === 'client' || props.type === 'debt';
+const isCalc = props.type === 'client';
 onMounted(async () => {
   try { rows.value = (await shop.itemHistory(props.id)).rows; }
   catch (e) { err.value = e.status ? e.message : 'السجل يحتاج اتصالًا بجهاز المحل'; }
