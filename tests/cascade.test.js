@@ -30,6 +30,7 @@ function randomDay(rand, st, { allowNew = true } = {}) {
     else if (r < 0.74) { const id = pick([...ids('client'), ...ids('debt'), ...ids('wallet')]); if (id) tryOp({ t: st.book.rows[id].status === 'active' ? 'delItem' : 'restoreItem', id }); }
     else if (r < 0.78 && allowNew) tryOp({ t: 'addItem', id: 'n' + n, type: pick(['client', 'debt', 'wallet', 'constant']), name: 'جديد ' + n, amount: amt() });
     else if (r < 0.80) { const id = pick(ids('constant')); if (id) tryOp({ t: 'setValue', id, value: amt() || 10 }); }
+    else if (r < 0.83) { const id = pick([...ids('client'), ...ids('wallet')]); if (id) tryOp({ t: 'renameItem', id, name: 'اسم ' + n }); }
   }
   // closing needs cash and every client / debt written (0 counts) — sometimes written as 0, sometimes not at all yet
   if (!st.book.day.cashChanged && !st.book.day.networkChanged) tryOp({ t: 'setCash', value: 0 });
@@ -46,6 +47,7 @@ function replay(opening, days) {
     const st = { items, book };
     for (const o of d.ops) reduce(st, { ...o, dayId: undefined });
     for (const c of d.comps || []) book.comps = { ...book.comps, [c.id]: c };
+    for (const id of d.purged || []) { items[id].purged = true; delete book.rows[id]; }   // deleted for good that day
     out.push(structuredClone(book));
   });
   return { items, books: out };
@@ -105,6 +107,17 @@ describe('a changed saved day flows to every later day exactly', () => {
       for (let i = 0; i < 6; i++) {
         let r = await s.call('POST', '/ops', { ops: days[i].ops });
         expect(r.body.rejected, `day ${i + 1} sent`).toEqual([]);
+        if (i > 0 && i < 5 && rand() < 0.5) {
+          const g0 = replay(opening, days), b0 = g0.books[g0.books.length - 1];
+          const cand = Object.keys(b0.rows).filter(id => g0.items[id] && !g0.items[id].purged && !['c1', 'w1'].includes(id));
+          if (cand.length) {
+            const id = cand[Math.floor(rand() * cand.length)];
+            const pr = await s.call('POST', `/items/${id}/purge`, { password: 'pw' });
+            expect(pr.status, `purge ${id}: ${pr.body.error || ''}`).toBe(200);
+            days[i].purged = [id];
+            r = { body: pr.body };
+          }
+        }
         if (i === 5) break;
         r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: `2026-01-${String(i + 1).padStart(2, '0')}`, password: 'pw' });
         expect(r.status, `day ${i + 1} closed: ${r.body.error || ''}`).toBe(200);
@@ -121,8 +134,16 @@ describe('a changed saved day flows to every later day exactly', () => {
         const target = { items: structuredClone(g.items), book: structuredClone(g.books[k]) };
         const edit = randomDay(rand, target, { allowNew: true });
         if (!edit.length) continue;
-        const r = await s.call('POST', `/days/${sv.days[k].id}/edit`, { ops: edit, note: 'تصحيح', password: 'pw' });
-        expect(r.status, `edit day ${k + 1}: ${r.body.error || ''}`).toBe(200);
+        if (k % 2) {
+          const sent = await s.call('POST', '/ops', { ops: edit.map(o => ({ ...o, dayId: sv.days[k].id })) });
+          expect(sent.body.rejected, 'late changes received').toEqual([]);
+          const late = await s.call('POST', '/late', { ids: [], accept: true, password: 'pw' });
+          expect(late.status, `late changes accepted: ${late.body.error || ''}`).toBe(200);
+          expect(late.body.failed, 'late changes all fit').toEqual([]);
+        } else {
+          const r = await s.call('POST', `/days/${sv.days[k].id}/edit`, { ops: edit, note: 'تصحيح', password: 'pw' });
+          expect(r.status, `edit day ${k + 1}: ${r.body.error || ''}`).toBe(200);
+        }
         days[k].ops.push(...edit);
         compare(await serverDays(s), replay(opening, days), `after editing day ${k + 1}`);
         // the open day still takes new changes on top of the new values

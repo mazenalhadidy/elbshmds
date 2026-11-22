@@ -153,7 +153,7 @@ export function notePart(before, after) {
    - wallet/constant: copied, unless they were changed on that later day.
    - cash, network, adjustments, inputs/outputs/sales: NOT carried (every day starts with its own).
    - status (deleted / active) and the ✓ mark: copied, unless changed on that later day.
-   - purged items are dropped.
+   - items deleted for good are not carried into a day that does not hold them already.
    Used when a day is closed (fresh = a brand-new next day) and when a past day is edited
    (the change flows to all the following days).
    --------------------------------------------------------------------- */
@@ -161,7 +161,9 @@ export function carry(prev, items, next, prevSummary = summarize(prev, items)) {
   next.day.opening = prevSummary.real;                       // تصفية البارحة = the confirmed real total
   for (const [id, pr] of Object.entries(prev.rows)) {
     const it = items[id];
-    if (!it || it.purged) { delete next.rows[id]; continue; }
+    if (!it) { delete next.rows[id]; continue; }
+    // deleted for good: never in a new day, but a saved day that already holds him keeps him (recalculated)
+    if (it.purged && !next.rows[id]) continue;
     let r = next.rows[id];
     if (!r) r = next.rows[id] = { opening: 0, calc: '', value: 0, active: !!pr.active, status: pr.status, changed: false, achanged: false, schanged: false };
     if (hasCalc(it.type)) { r.opening = rowFinal(pr, it.type); r.value = rowFinal(r, it.type); }   // today's change (calc) stays

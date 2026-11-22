@@ -1,5 +1,5 @@
 /* Human (Arabic) description of a change — used in the "لم يُقبل" list and in the past-day edit preview. */
-import { fmt } from './money.js';
+import { fmt, evalCalc } from './money.js';
 import { ENTRY_KINDS, ITEM_TYPES } from './engine.js';
 
 export function describeOp(op, items = {}) {
@@ -9,11 +9,11 @@ export function describeOp(op, items = {}) {
     case 'addEntry': return `إضافة إلى ${ENTRY_KINDS[op.kind] || ''}: ${m(op.amount)}${op.name ? ' — ' + op.name : ''}`;
     case 'editEntry': return `تعديل سجل: ${m(op.amount)}${op.name ? ' — ' + op.name : ''}`;
     case 'delEntry': return 'حذف سجل';
-    case 'addItem': return `إضافة ${ITEM_TYPES[op.type] || ''}: ${op.name || ''} — ${m(op.amount)}`;
+    case 'addItem': return op.type === 'debt' ? `إضافة إلى الديون: ${op.name || ''} — ${m(op.amount)}` : `إضافة ${ITEM_TYPES[op.type] || ''}: ${op.name || ''} — ${m(op.amount)}`;
     case 'renameItem': return `تغيير اسم ${name(op.id)} إلى ${op.name}`;
     case 'setValue': return `${name(op.id)}: القيمة أصبحت ${m(op.value)}`;
     case 'setActive': return `${name(op.id)}: ${op.active ? 'مستخدمة اليوم' : 'غير مستخدمة اليوم'}`;
-    case 'setCalc': return `${name(op.id)}: حساب جديد (${String(op.calc || '').replace(/\n/g, ' ')})`;
+    case 'setCalc': { const v = evalCalc(op.calc); return `${name(op.id)}: التغيير ${Number.isFinite(v) ? (v > 0 ? '+' : v < 0 ? '−' : '') + fmt(Math.abs(v)) : '—'}`; }
     case 'delItem': return `حذف ${name(op.id)}`;
     case 'restoreItem': return `استرجاع ${name(op.id)}`;
     case 'setCash': return `النقدية: ${m(op.value)}`;

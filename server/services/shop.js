@@ -422,7 +422,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     const newItems = clone(items);
     for (const did of debtIds) { if (plan[did] === did) newItems[did].type = 'client'; else newItems[did].purged = true; }
     const neg = d => ({ ...d, opening: -(d.opening || 0) || 0, calc: negateCalc(d.calc), value: -(d.value || 0) || 0 });
-    const join = (a, b) => [a, b].filter(x => String(x || '').trim()).join('\n');
+    const join = (a, b) => { const A = String(a || '').trim(), Z = String(b || '').trim(); return !A || A === '0' ? Z || A : !Z || Z === '0' ? A : A + '\n' + Z; };
     const r2 = x => Math.round(x * 100) / 100;
     const books = [];
     for (const d of [...days].sort((a, b) => a.seq - b.seq)) {
