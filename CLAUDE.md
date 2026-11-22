@@ -23,6 +23,7 @@ described there; extend it. Every change is small and in the existing style.
 - **Solid first**: `tests/cascade.test.js` (random weeks, every kind of past-day edit / تعويض, each day compared with a
   replay from scratch) must stay green, and `tests/e2e/walk.cjs` (the real screens, two days, an edit of the previous
   day, a تعويض, every page at 390/768/1280) must print ALL PASSED before a release. Extend both with every new feature.
+  (cascade.test.js runs on Linux only: on Windows the test process crashes after ~40 test databases in a row.)
 
 ## UI rules (he asked for each of these)
 - Language: **Modern Standard Arabic** (not Egyptian dialect) in the UI and in the AI's instructions/explanations.
