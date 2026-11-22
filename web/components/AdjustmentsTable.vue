@@ -8,6 +8,8 @@ import MoneyInput from './MoneyInput.vue';
 import Icon from './Icon.vue';
 const shop = useShop();
 const sign = ref(1), amount = ref(''), note = ref(''), amountEl = ref(null), noteEl = ref(null);
+// letters typed in the amount go straight on in the reason field
+function toNote(t) { note.value += t; nextTick(() => { const el = noteEl.value; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }); }
 const rows = computed(() => Object.values(shop.book?.adjs || {}));
 const total = computed(() => rows.value.reduce((a, x) => a + x.amount, 0));
 function add() {
@@ -21,7 +23,7 @@ function add() {
     <div class="card-h"><h2>إضافة أو خصم من التصفية الحقيقية</h2></div>
     <form class="addrow" style="flex-wrap:wrap" @submit.prevent="add">
       <div class="seg" role="radiogroup"><button type="button" :class="{ on: sign === 1 }" @click="sign = 1">+ إضافة</button><button type="button" :class="{ on: sign === -1 }" @click="sign = -1">− خصم</button></div>
-      <MoneyInput ref="amountEl" v-model="amount" style="flex:1;min-width:110px" placeholder="المبلغ" :disabled="!shop.canEdit" @enter="noteEl.focus()" />
+      <MoneyInput ref="amountEl" v-model="amount" style="flex:1;min-width:110px" placeholder="المبلغ" :disabled="!shop.canEdit" @enter="noteEl.focus()" @letters="toNote" />
       <input ref="noteEl" v-model="note" class="input" style="flex:2;min-width:160px" placeholder="السبب" :disabled="!shop.canEdit" @keydown.enter.prevent="add" />
       <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit" aria-label="إضافة"><Icon name="plus" /></button>
     </form>

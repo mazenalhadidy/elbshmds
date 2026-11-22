@@ -45,7 +45,8 @@ describe('old data, Turso copy, new computer', () => {
     const name = id => st.items[id].name;
     expect(name('c_c1')).toBe('أحمد'); expect(st.book.rows.c_c1.value).toBe(1700);
     expect(st.book.rows.w_w1.value).toBe(9100);
-    expect(st.book.rows.d_cr1.value).toBe(300); expect(st.book.rows.d_cr2).toBeUndefined();   // finished old debt not carried
+    expect(st.book.rows.d_cr1.value).toBe(-300); expect(st.items.d_cr1.type).toBe('client');    // an old debt = a person the shop owes (one list)
+    expect(st.summary.debts).toBe(300); expect(st.book.rows.d_cr2).toBeUndefined();   // finished old debt not carried
     expect(st.book.rows.k_k1.value).toBe(40);
     expect(Object.values(st.book.entries)[0].name).toBe('ربح كاش');
     // the saved day keeps its old numbers (diff sign is now virtual - real)

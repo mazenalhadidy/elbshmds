@@ -200,12 +200,48 @@ describe('the one-time repair at start (data left by v3.26–3.37)', () => {
     const ids = [...st.days.map(d => d.id), st.book.id || st.book.day.id];
     // what v3.26–3.31 stored: value only (3000, 3000, 5000 typed on day 3, then carried)
     const finals = [3000, 3000, 5000, 5000, 5000];
-    const s2 = await reboot(s, ids.map((id, k) => ({ sql: "UPDATE item_days SET opening=0, calc='', value=?, changed=? WHERE day_id=? AND item_id='d1'", args: [finals[k], k === 2 ? 1 : 0, id] })));
+    const s2 = await reboot(s, [{ sql: "UPDATE items SET type='debt' WHERE id='d1'" },
+      ...ids.map((id, k) => ({ sql: "UPDATE item_days SET opening=0, calc='', value=?, changed=? WHERE day_id=? AND item_id='d1'", args: [finals[k], k === 2 ? 1 : 0, id] }))]);
     const sv = await serverDays(s2);
-    expect(sv.books.map(b => rowFinal(b.rows.d1, 'debt'))).toEqual(finals);
-    expect(sv.books[2].rows.d1).toMatchObject({ opening: 3000, calc: '+2000', value: 5000 });
+    // then it joined the list of people: the shop owes him the same amounts
+    expect(sv.items.d1.type).toBe('client');
+    expect(sv.books.map(b => rowFinal(b.rows.d1, 'client'))).toEqual(finals.map(f => -f));
+    expect(sv.books[2].rows.d1).toMatchObject({ opening: -3000, calc: '-2000', value: -5000 });
+    sv.books.forEach((b, i) => expect(summarize(b, sv.items).debts, 'debts day ' + (i + 1)).toBe(finals[i]));
     // everything else is exactly as before
     sv.books.forEach((b, i) => expect(rowFinal(b.rows.c1, 'client'), 'client day ' + (i + 1)).toBe(rowFinal(good.books[i].rows.c1, 'client')));
+    s2.close();
+  });
+});
+
+describe('one list of people (العملاء + الديون)', () => {
+  it('a debt with the same name as a client is merged: one balance, the same totals every day; old phone changes are translated', async () => {
+    const s = await boot();
+    await s.call('POST', '/setup', { opening: 10000 });
+    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'c1', type: 'client', name: 'أحمد', amount: 4000 }), op({ t: 'addItem', id: 'w1', type: 'wallet', name: '0101', amount: 5000 }), op({ t: 'setCash', value: 0 })] });
+    r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: '2026-03-01', password: 'pw' });
+    const day1 = (await s.call('GET', '/state')).body.days[0], open = r.body.book.day.id;
+    // older data: a separate debt «احمد» (the shop owes him 1,000), on both days
+    for (const q of [
+      "INSERT INTO items(id,type,name,purged,created_at,rev) VALUES('d9','debt','احمد',0,'2026-03-01T00:00:00Z',1)",
+      { sql: "INSERT INTO item_days(day_id,item_id,opening,calc,value,active,status,changed,achanged,schanged,rev) VALUES(?, 'd9', 1000, '', 1000, 0, 'active', 0, 0, 0, 1)", args: [day1.id] },
+      { sql: "INSERT INTO item_days(day_id,item_id,opening,calc,value,active,status,changed,achanged,schanged,rev) VALUES(?, 'd9', 1000, '+200', 1200, 0, 'active', 0, 0, 0, 1)", args: [open] },
+      { sql: "UPDATE days SET real_total=real_total-1000 WHERE id=?", args: [day1.id] },
+    ]) await s.local.execute(q);
+    const dir = s.dataDir; s.close();
+    const s2 = await boot({ dataDir: dir });
+    const st = (await s2.call('GET', '/state')).body;
+    expect(st.items.d9.purged).toBe(true);
+    expect(st.book.rows.d9).toBeUndefined();
+    expect(st.book.rows.c1).toMatchObject({ opening: 3000, calc: '-200', value: 2800 });     // 4,000 − 1,200
+    expect(st.summary).toMatchObject({ clients: 2800, debts: 0 });
+    expect(st.days[0].real).toBe(day1.real - 1000);                                         // the saved day's total is kept
+    const d1 = (await s2.call('GET', '/days/' + day1.id)).body;
+    expect(summarize(d1.book, st.items)).toMatchObject({ clients: 3000, debts: 0, real: day1.real - 1000 });
+    // a phone wrote «the shop owes him 500 more» for the old debt before the update: it is the same person, −500
+    const x = await s2.call('POST', '/ops', { ops: [{ opId: 'old-phone-1', ts: '2026-03-01T10:00:00Z', t: 'setCalc', id: 'd9', calc: '+700' }] });
+    expect(x.body.rejected).toEqual([]);
+    expect(x.body.book.rows.c1).toMatchObject({ calc: '-700', value: 2300 });
     s2.close();
   });
 });

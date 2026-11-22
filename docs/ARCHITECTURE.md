@@ -11,9 +11,10 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 - ربح اليوم = inputs + sales − outputs
 - التصفية الافتراضية = تصفية البارحة + ربح اليوم
 - التصفية الحقيقية = wallets + clients + cash + network − shop debts − constants ± manual adjustments
+  (clients and shop debts are ONE list of people with a signed balance: clients = the positive ones, debts = the negative ones)
 - العجز/الزيادة = الافتراضي − الحقيقي (positive = عجز, negative = زيادة)
 - Closing a day: the real total becomes the next day's تصفية البارحة. Wallets, constants and shop debts carry over
-  (clients carry their final value; only clients have the calculator, debts are typed). Inputs/outputs/sales, cash, network, adjustments and notes start empty.
+  (a person carries his final balance: start + today's change, never a stored value). Inputs/outputs/sales, cash, network, adjustments and notes start empty.
 - Editing a saved day: the change flows to every later day (in the order they were worked), unless a later day changed that value itself.
 
 ## العجوزات (shared/deficits.js)
@@ -41,7 +42,7 @@ device in «لم يُقبل» until you retry or delete them. One device edits a
 | Table | What |
 |---|---|
 | `days` | one row per day: status (open/closed), date, opening, cash, network, notes, the saved totals |
-| `items` | wallets, clients, shop debts, constants (`type`), name, purged |
+| `items` | wallets, people (`client`, signed balance: + owes the shop, − the shop owes him), constants (`type`), name, purged. Older `debt` items are converted at start (`people_converted`) |
 | `item_days` | an item's numbers on a day (opening, calculator text, value, ✓, deleted) — this is also its history |
 | `entries` | inputs / outputs / sales |
 | `adjustments` | manual + / − on the real total, with a note |

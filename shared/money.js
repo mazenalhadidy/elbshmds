@@ -74,6 +74,13 @@ export function evalCalc(text) {
   return r2(t.reduce((a, x) => a + x.sign * x.value, 0));
 }
 
+/** The same calculation seen from the other side (every term's sign flipped): "500\n-200" -> "-500\n+200". */
+export function negateCalc(text) {
+  const t = calcTerms(text);
+  if (!t || !t.length) return String(text ?? '').trim() ? String(text) : '';
+  return t.map((x, k) => (x.sign > 0 ? (x.value === 0 && k === 0 ? '' : '-') : (k === 0 ? '' : '+')) + x.value).join('\n');
+}
+
 /** "2026-11-12" -> "١٢ نوفمبر ٢٠٢٦" */
 /** "الاثنين" for "2026-11-16". */
 export const fmtWeekday = d => (d ? new Date(d + 'T00:00:00Z').toLocaleDateString('ar-EG', { weekday: 'long', timeZone: 'UTC' }) : '');

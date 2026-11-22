@@ -5,7 +5,8 @@
    and answers questions (history, calendar, ربح الكاش ...).
    ===================================================================== */
 import crypto from 'node:crypto';
-import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart, unchecked, rowFinal } from '../../shared/engine.js';
+import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart, unchecked, rowFinal, sameKey } from '../../shared/engine.js';
+import { negateCalc } from '../../shared/money.js';
 import { describeOp } from '../../shared/describe.js';
 import { loadItems, loadDays, loadBook, saveItems, saveBook, nextRev, upsert, getMeta } from '../db/repo.js';
 
@@ -101,7 +102,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
         for (const o of lateOps) seen.add(o.opId);
       }
       const state = { items: clone(items), book: clone(open) };
-      const { done, rejected } = applyAll(state, fresh);
+      const { done, rejected } = applyAll(state, fresh.map(fromOld));
       if (fresh.length) await write(async (tx, r) => {
         await saveItems(tx, items, state.items, r);
         await saveBook(tx, open, state.book, summarize(state.book, state.items), r);
@@ -159,7 +160,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       if (!preview && !String(note || '').trim()) throw new UserError('اكتب سبب التعديل');
       const st = { items: clone(items), book: clone(target) };
       // the first day's تصفية البارحة can be changed only here
-      const fixed = ops.map(o => (o.t === 'setOpening' && target.day.seq === 1 ? { ...o, force: true } : o));
+      const fixed = ops.map(fromOld).map(o => (o.t === 'setOpening' && target.day.seq === 1 ? { ...o, force: true } : o));
       const { rejected } = applyAll(st, fixed.map(o => ({ ...o, dayId: undefined })));
       if (rejected.length) throw new UserError('تعديل غير صالح: ' + rejected[0].error);
       const { books, changes } = await cascade(target, st);
@@ -256,7 +257,8 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       const ok = [], bad = [];
       for (const x of list) {
         const { opId, ts, dayId: _d, dayDate, ...op } = x.op;
-        try { reduce(st, { ...op, ts: x.op.ts }); ok.push({ x, op: { ...op, ts: x.op.ts, opId: x.opId } }); }
+        const now1 = fromOld({ ...op, ts: x.op.ts });
+        try { reduce(st, now1); ok.push({ x, op: { ...now1, opId: x.opId } }); }
         catch (e) { bad.push({ x, error: e.message }); }
       }
       if (ok.length) {
@@ -400,6 +402,76 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     return books.length;
   }
   await repairFlow();
+
+  /**
+   * ONE LIST OF PEOPLE (v3.38): every «debt» item becomes a person («client» item) with a negative balance — the same
+   * totals, every day. A debt with the same name as a client is merged into that client (one balance = what he owes
+   * minus what the shop owes him); its old item is removed. Runs at every start (nothing to do once converted).
+   * `converted` remembers each old debt id: a change written for it by a phone before the update is translated.
+   */
+  let converted = JSON.parse((await getMeta(db, 'people_converted')) || '{}');
+  async function mergePeople() {
+    const debtIds = Object.keys(items).filter(id => items[id].type === 'debt' && !items[id].purged);
+    if (!debtIds.length) return 0;
+    const at = now().toISOString(), plan = {};
+    for (const did of debtIds) {
+      const k = sameKey(items[did].name);
+      const cid = Object.keys(items).find(id => items[id].type === 'client' && !items[id].purged && sameKey(items[id].name) === k);
+      plan[did] = cid || did;
+    }
+    const newItems = clone(items);
+    for (const did of debtIds) { if (plan[did] === did) newItems[did].type = 'client'; else newItems[did].purged = true; }
+    const neg = d => ({ ...d, opening: -(d.opening || 0) || 0, calc: negateCalc(d.calc), value: -(d.value || 0) || 0 });
+    const join = (a, b) => [a, b].filter(x => String(x || '').trim()).join('\n');
+    const r2 = x => Math.round(x * 100) / 100;
+    const books = [];
+    for (const d of [...days].sort((a, b) => a.seq - b.seq)) {
+      const before = await loadBook(db, d.id), after = clone(before);
+      let touched = false;
+      for (const did of debtIds) {
+        const dr = after.rows[did]; if (!dr) continue;
+        touched = true;
+        const into = plan[did];
+        if (into === did) { after.rows[did] = neg(dr); continue; }
+        const c = after.rows[into];
+        if (!c || (c.status !== 'active' && dr.status === 'active')) after.rows[into] = { ...neg(dr), active: !!c?.active || dr.active };
+        else if (dr.status === 'active') {
+          Object.assign(c, { opening: r2(c.opening - (dr.opening || 0)), calc: join(c.calc, negateCalc(dr.calc)), value: r2(c.value - (dr.value || 0)),
+            changed: c.changed || dr.changed, schanged: c.schanged || dr.schanged });
+        }
+        delete after.rows[did];
+      }
+      if (!touched) continue;
+      const a = summarize(before, items), z = summarize(after, newItems);
+      // the day's stored totals are kept (imported days hold their own); only what the conversion changed moves them
+      const kept = days.find(x => x.id === d.id) || {};
+      const shift = k => (kept[k] == null ? z[k] : r2(kept[k] + (z[k] ?? 0) - (a[k] ?? 0)));
+      const sum = { ...z, profit: shift('profit'), virtual: shift('virtual'), real: shift('real'), diff: shift('diff') };
+      // the day's closing values keep their meaning: only the split between العملاء and الديون may move (a merge)
+      if (after.day.orig) {
+        after.day.orig = { ...after.day.orig, ...(after.day.orig.clients != null ? { clients: r2(after.day.orig.clients + z.clients - a.clients) } : {}),
+          ...(after.day.orig.debts != null ? { debts: r2(after.day.orig.debts + z.debts - a.debts) } : {}) };
+      }
+      books.push({ before, after, sum });
+    }
+    converted = { ...converted, ...Object.fromEntries(debtIds.map(did => [did, { into: plan[did], at }])) };
+    await write(async (tx, r) => {
+      await saveItems(tx, items, newItems, r);
+      for (const { before, after, sum } of books) await saveBook(tx, before, after, sum, r);
+      await tx.execute({ sql: "INSERT INTO meta(key,value) VALUES('people_converted',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: [JSON.stringify(converted)] });
+    });
+    console.log(`people: ${debtIds.length} debt(s) joined the list of people (${debtIds.filter(d => plan[d] !== d).length} merged with a client of the same name)`);
+    await reload();
+    return debtIds.length;
+  }
+  await mergePeople();
+  /** A change a phone wrote for an old debt before the update: same person, and its change seen from the other side. */
+  const fromOld = o => {
+    const c = o && converted[o.id]; if (!c) return o;
+    const x = { ...o, id: c.into };
+    if (o.t === 'setCalc' && String(o.ts || '') < c.at) x.calc = negateCalc(o.calc);
+    return x;
+  };
 
   return {
     snapshot, setup, applyOps, closeDay, getDay, editDay, compensate, deleteCompensation, decideLate, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,

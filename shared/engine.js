@@ -53,6 +53,16 @@ export function emptyBook(dayId, opening = null, seq = 1) {
   };
 }
 
+/**
+ * PEOPLE: one list for العملاء and الديون. A person is a «client» item with ONE balance: positive = he owes the shop
+ * (shown in العملاء), negative = the shop owes him (shown in الديون, as a positive amount). At 0 he stays where the day
+ * started. Moving from one to the other is just his balance crossing 0.
+ */
+export function personSide(row) {
+  const f = rowFinal(row, 'client');
+  return f < 0 || (f === 0 && (row.opening || 0) < 0) ? 'debt' : 'client';
+}
+
 /** Two names / numbers are the same item when they read the same: أ/إ/آ=ا، ة=ه، ى=ي، no tashkeel, spaces and dashes ignored, any digits. */
 export const sameKey = s => toLatinDigits(String(s ?? '')).trim().toLowerCase().replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/[\u064B-\u0652\u0640]/g, '').replace(/[\s\-_.]+/g, '');
 
@@ -82,8 +92,8 @@ export function summarize(book, items) {
     if (!it || row.status !== 'active') continue;          // deleted items never count
     const v = rowFinal(row, it.type);
     if (it.type === 'wallet') wallets += v;                  // every wallet counts (the ✓ "active" mark is only a visual hint)
-    else if (it.type === 'client') clients += v;
-    else if (it.type === 'debt') debts += v;
+    else if (it.type === 'client') { if (v >= 0) clients += v; else debts -= v; }   // one person, one balance: + owes the shop, − the shop owes him
+    else if (it.type === 'debt') debts += v;                                        // (older data, converted at start)
     else if (it.type === 'constant') constants += v;
   }
   for (const e of Object.values(book.entries)) { if (e.kind === 'input') input += e.amount; else if (e.kind === 'output') output += e.amount; else sale += e.amount; }
@@ -184,8 +194,8 @@ export function reduce(state, op) {
   const ts = op.ts || new Date().toISOString();
   // two ACTIVE wallets (or clients, or debts) with the same name/number would be impossible to tell apart
   const noDuplicate = (type, name, except) => {
-    const k = sameKey(name);
-    const same = Object.entries(items).find(([id, it]) => id !== except && it.type === type && !it.purged && sameKey(it.name) === k && book.rows[id]?.status === 'active');
+    const k = sameKey(name), group = t => (t === 'debt' ? 'client' : t);         // العملاء and الديون are ONE list of people
+    const same = Object.entries(items).find(([id, it]) => id !== except && group(it.type) === group(type) && !it.purged && sameKey(it.name) === k && book.rows[id]?.status === 'active');
     if (same) fail(type === 'wallet' ? 'هذا الرقم موجود بالفعل' : 'هذا الاسم موجود بالفعل');
   };
 
@@ -211,10 +221,13 @@ export function reduce(state, op) {
       if (items[op.id]) return;                                        // repeated op
       const name = op.type === 'wallet' ? toLatinDigits(text(op.name)) : text(op.name);   // wallet numbers are stored with 0-9
       if (!name && op.type !== 'constant') fail(op.type === 'wallet' ? 'اكتب رقم المحفظة' : 'اكتب الاسم');
-      const amount = op.type === 'constant' ? positive(op.amount) : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
+      let amount = op.type === 'constant' ? positive(op.amount) : amountOf(op.amount, op.type === 'wallet' ? 'اكتب رصيد المحفظة' : 'اكتب المبلغ');
       if (op.type !== 'constant') noDuplicate(op.type, name);
-      items[op.id] = { id: op.id, type: op.type, name: name || ITEM_TYPES.constant, purged: false, createdAt: ts };
-      book.rows[op.id] = hasCalc(op.type)
+      // added in الديون: the same person list, with the shop owing him (negative balance)
+      const type = op.type === 'debt' ? 'client' : op.type;
+      if (op.type === 'debt') amount = -amount || 0;                        // (never −0)
+      items[op.id] = { id: op.id, type, name: name || ITEM_TYPES.constant, purged: false, createdAt: ts };
+      book.rows[op.id] = hasCalc(type)
         ? { opening: amount, calc: '0', value: amount, active: false, status: 'active', changed: true, achanged: false, schanged: true }   // a new one = written today, change 0
         : { opening: 0, calc: '', value: amount, active: op.type === 'wallet', status: 'active', changed: true, achanged: false, schanged: true };
       return;

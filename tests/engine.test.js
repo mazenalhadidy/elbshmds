@@ -1,6 +1,7 @@
 // The accounting rules (shared/engine.js), without server or database.
 import { describe, it, expect } from 'vitest';
-import { emptyBook, reduce, summarize, nextBook, carry, applyAll, checkCloseDate, isCashProfit, clone, unchecked, rowFinal, sameKey } from '../shared/engine.js';
+import { emptyBook, reduce, summarize, nextBook, carry, applyAll, checkCloseDate, isCashProfit, clone, unchecked, rowFinal, sameKey, personSide } from '../shared/engine.js';
+import { negateCalc } from '../shared/money.js';
 
 let n = 0;
 const st0 = (opening = 1000) => ({ items: {}, book: emptyBook('d1', opening) });
@@ -26,18 +27,26 @@ describe('engine', () => {
     expect(s.diff).toBe(0);                                      // virtual - real
   });
 
-  it('debts are the same as clients: today\'s change, new ones start with change 0, no stored value is trusted', () => {
+  it('one list of people: added in الديون = the shop owes him; his balance crossing 0 moves him to the other table', () => {
     const st = st0(0);
     go(st, { t: 'addItem', id: 'd1', type: 'debt', name: 'تاجر', amount: 200 });
-    expect(st.book.rows.d1.calc).toBe('0');                                        // written today: change 0
-    expect(() => go(st, { t: 'setValue', id: 'd1', value: 5 })).toThrow();
-    go(st, { t: 'setCalc', id: 'd1', calc: '+150' });
-    expect(summarize(st.book, st.items).debts).toBe(350);
+    expect(st.items.d1.type).toBe('client');
+    expect(st.book.rows.d1).toMatchObject({ opening: -200, calc: '0', value: -200 });
+    expect(personSide(st.book.rows.d1)).toBe('debt');
+    expect(summarize(st.book, st.items)).toMatchObject({ debts: 200, clients: 0 });
+    go(st, { t: 'addItem', id: 'c1', type: 'client', name: 'سامي', amount: 3000 });
+    expect(() => go(st, { t: 'addItem', id: 'x', type: 'debt', name: 'سامى', amount: 1 })).toThrow(/موجود/);   // the same person
+    go(st, { t: 'setCalc', id: 'c1', calc: '-10000' });                        // he paid 10,000: the shop now owes him 7,000
+    expect(personSide(st.book.rows.c1)).toBe('debt');
+    expect(summarize(st.book, st.items)).toMatchObject({ debts: 7200, clients: 0 });
     const next = nextBook(st.book, st.items, 'd2');
-    expect(next.rows.d1.opening).toBe(350); expect(next.rows.d1.calc).toBe('');
-    expect(unchecked(next, st.items)).toEqual(['d1']);                             // a new day: not written yet
-    // the value is ALWAYS start + change (no stored value is trusted over it)
-    expect(rowFinal({ opening: 0, calc: '', value: 900 }, 'debt')).toBe(0);
+    expect(next.rows.c1).toMatchObject({ opening: -7000, calc: '' });
+    expect(unchecked(next, st.items).sort()).toEqual(['c1', 'd1']);
+    go({ items: st.items, book: next }, { t: 'setCalc', id: 'd1', calc: '+200' });   // paid back: 0, stays in الديون today
+    expect(rowFinal(next.rows.d1, 'client')).toBe(0); expect(personSide(next.rows.d1)).toBe('debt');
+    expect(personSide({ opening: 0, calc: '', value: 0 })).toBe('client');
+    expect(rowFinal({ opening: 0, calc: '', value: 900 }, 'client')).toBe(0);       // never a stored value over start + change
+    expect(negateCalc('500\n-200\n+30')).toBe('-500\n+200\n-30'); expect(negateCalc('-7000')).toBe('7000'); expect(negateCalc('0')).toBe('0'); expect(negateCalc('')).toBe('');
   });
 
   it('names and numbers are compared as they read', () => {

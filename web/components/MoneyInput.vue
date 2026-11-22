@@ -53,9 +53,13 @@ function onKey(e) {
   if (e.key === 'Enter') { e.preventDefault(); emit('enter'); }
   else if (e.key === 'Escape') emit('escape');
 }
-defineExpose({ focus: () => el.value?.focus(), select: () => el.value?.select() });
+// focus with the cursor after the last digit (a number moved here from the name field: typing goes on, nothing is replaced)
+let keepCaret = false;
+function focusEnd() { const i = el.value; if (!i) return; keepCaret = true; i.focus(); const n = i.value.length; i.setSelectionRange(n, n); }
+function onFocus(e) { if (keepCaret) { keepCaret = false; return; } e.target.select(); }
+defineExpose({ focus: () => el.value?.focus(), select: () => el.value?.select(), focusEnd });
 </script>
 <template>
   <input ref="el" class="input money" type="text" inputmode="decimal" autocomplete="off" :placeholder="placeholder"
-         :value="text" @input="onInput" @keydown="onKey" @focus="e => e.target.select()" />
+         :value="text" @input="onInput" @keydown="onKey" @focus="onFocus" />
 </template>

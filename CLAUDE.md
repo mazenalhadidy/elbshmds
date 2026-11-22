@@ -20,6 +20,9 @@ described there; extend it. Every change is small and in the existing style.
 - Reply in English, short and plain; Arabic only for the exact UI words.
 - Before finishing: `npm run lint`, `npm test`, `npm run build` (and `npm test` in wa-debt-checker if it changed).
   Check the screen in the browser (Playwright, phone 390 px and 1280 px) — measure, don't guess.
+- **Solid first**: `tests/cascade.test.js` (random weeks, every kind of past-day edit / تعويض, each day compared with a
+  replay from scratch) must stay green, and `tests/e2e/walk.cjs` (the real screens, two days, an edit of the previous
+  day, a تعويض, every page at 390/768/1280) must print ALL PASSED before a release. Extend both with every new feature.
 
 ## UI rules (he asked for each of these)
 - Language: **Modern Standard Arabic** (not Egyptian dialect) in the UI and in the AI's instructions/explanations.
@@ -40,17 +43,23 @@ described there; extend it. Every change is small and in the existing style.
 - الحسابات: العملاء (right) · المحافظ (middle) · الديون (left), side by side from 1000 px (narrower: tabs); each list has
   ONE fixed height (the page never jumps while searching). The first field of each table also searches it (letters
   and digits, Arabic-insensitive, spaces ignored); an exact ACTIVE duplicate is refused (same `sameKey`; the same
-  number with different text is another wallet). Clients and ديون are the SAME table: التغيير | النهائي (the value
+  number with different text is another wallet). Clients and ديون are ONE list of people (one item type `client`, one signed balance:
+  + he owes the shop → العملاء, − the shop owes him → الديون shown positive; at 0 he stays where the day started). A
+  person moves by himself when his balance crosses 0. Typing a name in one table shows matching people of the other one;
+  picking him opens his calculator in his own direction. Same table: التغيير | النهائي (the value
   from before is not shown). التغيير = the calculator (as it always was, same look). Tapping النهائي and typing the new
   value saves the difference as today's change. A new client/debt starts with change 0. Sorted by the balance
   (largest first), zero balances at the bottom.
 - Delete buttons: red outline icons (never filled), with a confirmation or «تراجع».
 - الإدارة: الثوابت is a normal table right under النقدية والمكن. Every other device in «الهواتف والأجهزة المتصلة» has a
   red «فصل» (password): its login stops at once (`data/disconnected-devices.json`); it can log in again with the password.
-- اليومية: letters typed after the amount jump to the name field.
+- Jumping between fields (never in المحافظ): اليومية and الإضافة/الخصم — letters typed after the amount go on in the
+  name/reason field (which may hold digits); العملاء / الديون / الثوابت — digits typed after the name go to the amount.
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 
 ## Accounting decisions (do not change without asking)
+- A client/debt value is ALWAYS start + today's change (`rowFinal`), never a stored value (a fallback once kept stale
+  values in the days after an edited day — v3.32–3.37; repaired once at start: `repair_flow_v1`).
 - diff = التصفية الافتراضية − التصفية الحقيقية; positive = عجز. Real total of a day = تصفية البارحة of the next day.
 - Until today's cash or network is typed, the day shows «بانتظار عدّ النقدية» (no fake shortage).
 - **العجوزات** (`web/pages/DeficitsPage.vue`, route `/settle/deficits`): one row per saved day with «تعويض».

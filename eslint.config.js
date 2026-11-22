@@ -5,7 +5,7 @@ import vue from 'eslint-plugin-vue';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/**', 'app/**', 'data/**', 'node_modules/**'] },
+  { ignores: ['dist/**', 'app/**', 'data/**', 'node_modules/**', 'tests/e2e/**'] },   // the browser walk uses Playwright (not a dependency)
   js.configs.recommended,
   ...vue.configs['flat/essential'],
   {
