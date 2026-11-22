@@ -7,13 +7,13 @@
    - item   : something with a balance that lives across days:
                 wallet   (محفظة)  -> its balance is typed by hand
                 client   (عميل)    -> debt the client owes the shop
-                debt     (ديون)    -> what the shop owes someone (typed)
+                debt     (ديون)    -> what the shop owes someone (same rows as a client)
                 constant (ثابت)    -> fixed amount subtracted every day
    - book   : everything of ONE day: the day itself, one "row" per item,
               the input/output/sale entries and the manual adjustments.
    - row    : an item's numbers on a given day.
-                wallet/debt/constant: value (typed)
-                client             : opening (from the day before) + calculator text = final
+                wallet/constant: value (typed)
+                client/debt    : opening (from the day before) + today's change (calculator text) = final
    - op     : one change, e.g. { t:'addEntry', id, kind:'sale', amount:500 }.
               reduce(state, op) applies it. Same op + same state = same result.
 
@@ -63,10 +63,7 @@ export function unchecked(book, items) {
 
 /** A row's final value on its day. */
 export function rowFinal(row, type) {
-  if (hasCalc(type)) {
-    if (!row.calc && !row.opening) return r2(row.value || 0);           // a debt typed by hand in v3.26–3.31
-    return r2((row.opening || 0) + (evalCalc(row.calc) || 0));
-  }
+  if (hasCalc(type)) return r2((row.opening || 0) + (evalCalc(row.calc) || 0));   // ALWAYS: the day's start + today's change
   return r2(row.value || 0);
 }
 
@@ -157,7 +154,7 @@ export function carry(prev, items, next, prevSummary = summarize(prev, items)) {
     if (!it || it.purged) { delete next.rows[id]; continue; }
     let r = next.rows[id];
     if (!r) r = next.rows[id] = { opening: 0, calc: '', value: 0, active: !!pr.active, status: pr.status, changed: false, achanged: false, schanged: false };
-    if (hasCalc(it.type)) { r.opening = rowFinal(pr, it.type); r.value = rowFinal(r, it.type); }
+    if (hasCalc(it.type)) { r.opening = rowFinal(pr, it.type); r.value = rowFinal(r, it.type); }   // today's change (calc) stays
     else if (!r.changed) r.value = pr.value;
     if (!r.achanged) r.active = !!pr.active;
     if (!r.schanged) r.status = pr.status;
@@ -228,7 +225,7 @@ export function reduce(state, op) {
       if (it.type !== 'constant' && book.rows[op.id]?.status === 'active') noDuplicate(it.type, name, op.id);
       it.name = name; return;
     }
-    case 'setValue': {                                                  // wallet balance / debt / constant amount, typed by hand
+    case 'setValue': {                                                  // wallet balance / constant amount, typed by hand
       lateRefuse();
       const it = item(op.id), r = row(op.id);
       if (hasCalc(it.type)) fail('بيانات غير صحيحة');
@@ -241,7 +238,6 @@ export function reduce(state, op) {
       if (!hasCalc(it.type)) fail('بيانات غير صحيحة');
       const calc = String(op.calc ?? '');
       if (!Number.isFinite(evalCalc(calc))) fail('الحساب غير صحيح — استخدم أرقامًا و + و − فقط');
-      if (!r.calc && !r.opening && r.value) r.opening = r.value;         // a debt typed by hand before: its value is the start
       r.calc = calc; r.value = rowFinal(r, it.type); return;
     }
     case 'delItem': { item(op.id); const r = row(op.id); r.status = 'deleted'; r.schanged = true; return; }   // stays visible (struck), keeps its history

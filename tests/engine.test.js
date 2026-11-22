@@ -26,7 +26,7 @@ describe('engine', () => {
     expect(s.diff).toBe(0);                                      // virtual - real
   });
 
-  it('debts are the same as clients: today\'s change, new ones start with change 0, a debt typed by hand keeps its value', () => {
+  it('debts are the same as clients: today\'s change, new ones start with change 0, no stored value is trusted', () => {
     const st = st0(0);
     go(st, { t: 'addItem', id: 'd1', type: 'debt', name: 'تاجر', amount: 200 });
     expect(st.book.rows.d1.calc).toBe('0');                                        // written today: change 0
@@ -36,12 +36,8 @@ describe('engine', () => {
     const next = nextBook(st.book, st.items, 'd2');
     expect(next.rows.d1.opening).toBe(350); expect(next.rows.d1.calc).toBe('');
     expect(unchecked(next, st.items)).toEqual(['d1']);                             // a new day: not written yet
-    // a debt typed by hand in the older version (value only): same final value, and the change starts from it
-    const old = { opening: 0, calc: '', value: 900, active: false, status: 'active' };
-    expect(rowFinal(old, 'debt')).toBe(900);
-    const st2 = { items: { x: { id: 'x', type: 'debt', name: 'قديم' } }, book: { ...emptyBook('d9', 0), rows: { x: { ...old } } } };
-    go(st2, { t: 'setCalc', id: 'x', calc: '-100' });
-    expect(rowFinal(st2.book.rows.x, 'debt')).toBe(800);
+    // the value is ALWAYS start + change (no stored value is trusted over it)
+    expect(rowFinal({ opening: 0, calc: '', value: 900 }, 'debt')).toBe(0);
   });
 
   it('names and numbers are compared as they read', () => {

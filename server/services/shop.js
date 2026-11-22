@@ -5,7 +5,7 @@
    and answers questions (history, calendar, ربح الكاش ...).
    ===================================================================== */
 import crypto from 'node:crypto';
-import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart, unchecked } from '../../shared/engine.js';
+import { emptyBook, summarize, applyAll, nextBook, carry, checkCloseDate, clone, isCashProfit, reduce, EngineError, COMP_FIELDS, notePart, unchecked, rowFinal } from '../../shared/engine.js';
 import { describeOp } from '../../shared/describe.js';
 import { loadItems, loadDays, loadBook, saveItems, saveBook, nextRev, upsert, getMeta } from '../db/repo.js';
 
@@ -361,6 +361,45 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     items = await loadItems(db); days = await loadDays(db); rev = Number(await getMeta(db, 'rev', 0)); late = await loadLate();
     const o = days.find(d => d.status === 'open'); open = o ? await loadBook(db, o.id) : null;
   }
+
+  /**
+   * ONE-TIME REPAIR (v3.38), at start:
+   * 1. Debts typed by hand in v3.26–3.31 (value only, no start / change) become «start + change» with the SAME final.
+   * 2. v3.32–3.37 could keep a stale value for a client / debt in the days AFTER an edited day (or a تعويض): those days
+   *    are recalculated from the earliest edited day onward — exactly what the edit should have done.
+   * Days before the first edit (e.g. imported from the old version) keep everything they hold. Runs once.
+   */
+  async function repairFlow() {
+    if (await getMeta(db, 'repair_flow_v1')) return 0;
+    const all = [...days].sort((a, b) => a.seq - b.seq);
+    const firstEdited = all.find(d => d.own > 0 && d.status === 'closed')?.seq ?? Infinity;
+    const sign = v => (v > 0 ? '+' + v : String(v));
+    const books = []; let prev = null, typed = new Set();
+    for (const d of all) {
+      const before = await loadBook(db, d.id), after = clone(before), nowTyped = new Set();
+      for (const [id, r] of Object.entries(after.rows)) {
+        if (items[id]?.type !== 'debt' || r.calc || r.opening || !r.value) continue;
+        const p = prev?.rows[id];
+        if (!p) { r.opening = r.value; nowTyped.add(id); continue; }                  // added as a typed debt
+        const pf = rowFinal(p, 'debt');
+        // typed (set by hand that day, or carried from a typed day, or unchanged): keep its final value
+        if (r.changed || typed.has(id) || r.value === pf) { r.opening = pf; const diff = Math.round((r.value - pf) * 100) / 100; if (diff) r.calc = sign(diff); nowTyped.add(id); }
+        // otherwise it is a stale value after an edit: the recalculation below puts it right
+      }
+      if (prev && d.seq > firstEdited) carry(prev, items, after);
+      for (const [id, r] of Object.entries(after.rows)) if (items[id]?.type === 'client' || items[id]?.type === 'debt') r.value = rowFinal(r, items[id].type);
+      if (JSON.stringify(before) !== JSON.stringify(after)) books.push({ before, after });
+      prev = after; typed = nowTyped;
+    }
+    await write(async (tx, r) => {
+      for (const { before, after } of books) await saveBook(tx, before, after, summarize(after, items), r);
+      await tx.execute({ sql: "INSERT INTO meta(key,value) VALUES('repair_flow_v1',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: [String(books.length)] });
+    });
+    if (books.length) console.log(`repair: ${books.length} day(s) recalculated (debts typed by hand / values after an edited day)`);
+    await reload();
+    return books.length;
+  }
+  await repairFlow();
 
   return {
     snapshot, setup, applyOps, closeDay, getDay, editDay, compensate, deleteCompensation, decideLate, setDayNotes, purgeItem, itemHistory, cashProfitThisMonth, exportAll, reload,
