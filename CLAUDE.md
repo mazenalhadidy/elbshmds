@@ -62,6 +62,8 @@ described there; extend it. Every change is small and in the existing style.
 - A client/debt value is ALWAYS start + today's change (`rowFinal`), never a stored value (a fallback once kept stale
   values in the days after an edited day — v3.32–3.37; repaired once at start: `repair_flow_v1`).
 - diff = التصفية الافتراضية − التصفية الحقيقية; positive = عجز. Real total of a day = تصفية البارحة of the next day.
+- Exception: when the day before today was NOT saved, the open day's تصفية البارحة can be typed (✎, `setOpening` with
+  `gap`, checked by the server). It is kept (`days.opening_manual`) when earlier days change; the next day is normal.
 - Until today's cash or network is typed, the day shows «بانتظار عدّ النقدية» (no fake shortage).
 - **العجوزات** (`web/pages/DeficitsPage.vue`, route `/settle/deficits`): one row per saved day with «تعويض».
 - **تعويض** (`CompensateDialog.vue`, `POST /api/days/:id/compensate`, table `compensations`): a signed amount added to

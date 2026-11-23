@@ -124,6 +124,11 @@ export const MIGRATIONS = [
       'CREATE INDEX IF NOT EXISTS late_ops_rev ON late_ops(rev)',
     ],
   },
+  {
+    version: 6,
+    name: 'a «تصفية البارحة» typed by hand (the day before was not saved): kept when earlier days change',
+    sql: ['ALTER TABLE days ADD COLUMN opening_manual INTEGER NOT NULL DEFAULT 0'],
+  },
 ];
 
 /** Connection settings for the LOCAL file (Turso manages its own). WAL = readers never wait for the writer. */
@@ -151,7 +156,14 @@ export async function migrate(db, { remote = false } = {}) {
   const cur = Number((await db.execute({ sql: 'SELECT value FROM meta WHERE key=?', args: [key] })).rows[0]?.value || 0);
   for (const m of MIGRATIONS) {
     if (m.version <= cur) continue;
-    await db.batch([...m.sql, { sql: "INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: [key, String(m.version)] }], 'write');
+    // «ADD COLUMN» of a column that is already there (a copy restored from elsewhere): nothing to do
+    const sql = [];
+    for (const q of m.sql) {
+      const add = typeof q === 'string' && q.match(/^ALTER TABLE (\w+) ADD COLUMN (\w+)/i);
+      if (add && (await db.execute(`PRAGMA table_info(${add[1]})`)).rows.some(c => c.name === add[2])) continue;
+      sql.push(q);
+    }
+    await db.batch([...sql, { sql: "INSERT INTO meta(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", args: [key, String(m.version)] }], 'write');
     if (!remote) console.log(`database: applied migration ${m.version} (${m.name})`);
   }
 }

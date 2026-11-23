@@ -11,7 +11,7 @@ let n = 0;
 const op = o => ({ opId: 'cx' + ++n, ts: new Date(Date.UTC(2026, 0, 1, 0, 0, n)).toISOString(), ...o });
 
 /** One day of random activity on the current state (only changes the engine accepts are kept). */
-function randomDay(rand, st, { allowNew = true } = {}) {
+function randomDay(rand, st, { allowNew = true, allowGap = false } = {}) {
   const pick = a => a[Math.floor(rand() * a.length)];
   const ids = t => Object.keys(st.book.rows).filter(id => st.items[id]?.type === t && !st.items[id].purged);
   const amt = () => pick([0, 50, 300, 1000, 2500, 7000, 12000]);
@@ -31,6 +31,7 @@ function randomDay(rand, st, { allowNew = true } = {}) {
     else if (r < 0.78 && allowNew) tryOp({ t: 'addItem', id: 'n' + n, type: pick(['client', 'debt', 'wallet', 'constant']), name: 'جديد ' + n, amount: amt() });
     else if (r < 0.80) { const id = pick(ids('constant')); if (id) tryOp({ t: 'setValue', id, value: amt() || 10 }); }
     else if (r < 0.83) { const id = pick([...ids('client'), ...ids('wallet')]); if (id) tryOp({ t: 'renameItem', id, name: 'اسم ' + n }); }
+    else if (r < 0.86 && allowGap) tryOp({ t: 'setOpening', value: pick([5000, 90000, 123456]), gap: true });   // the day before was not saved
   }
   // closing needs cash and every client / debt written (0 counts) — sometimes written as 0, sometimes not at all yet
   if (!st.book.day.cashChanged && !st.book.day.networkChanged) tryOp({ t: 'setCash', value: 0 });
@@ -123,7 +124,7 @@ describe('a changed saved day flows to every later day exactly', () => {
         expect(r.status, `day ${i + 1} closed: ${r.body.error || ''}`).toBe(200);
         const g = replay(opening, days); const prev = g.books[g.books.length - 1];
         const nx = { items: g.items, book: nextBook(prev, g.items, 'next') };
-        days.push({ ops: randomDay(rand, nx, { allowNew: i < 4 }) });
+        days.push({ ops: randomDay(rand, nx, { allowNew: i < 4, allowGap: true }) });
       }
       compare(await serverDays(s), replay(opening, days), 'before any edit');
 

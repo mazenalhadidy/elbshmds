@@ -47,7 +47,7 @@ const was = key => {
     <div class="line">
       <span>تصفية البارحة</span>
       <span class="row"><Was :was="was('opening')" :v="s.opening" />
-        <button v-if="editableOpening" class="btn icon" title="تعديل تصفية أول يوم" @click="emit('edit-opening')">✎</button></span>
+        <button v-if="editableOpening" class="btn icon" title="تعديل تصفية البارحة" @click="emit('edit-opening')">✎</button></span>
     </div>
     <div class="line">
       <span class="row">ربح اليوم <button class="more" :class="{ on: openProfit }" :aria-expanded="openProfit" :aria-label="openProfit ? 'إخفاء التفاصيل' : 'التفاصيل'" :title="openProfit ? 'إخفاء التفاصيل' : 'التفاصيل'" @click="openProfit = !openProfit"><Icon name="chev" :size="16" /></button></span>

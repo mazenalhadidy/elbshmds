@@ -166,6 +166,16 @@ const ok = (c, msg) => { console.log((c ? '✓ ' : '✗ ') + msg); if (!c) fails
   ok(fin(s6.book.rows[hasan]) === -2000, 'phone: +500 → the shop owes حسن 2,000');
   await ph.close();
 
+  /* ---------- تصفية البارحة typed by hand (the day before today was not saved) ---------- */
+  await go('/settle');
+  const pen = p.locator('button[title="تعديل تصفية البارحة"]');
+  ok(await pen.count() === 1, 'the day before today is not saved: ✎ next to تصفية البارحة');
+  await pen.click(); await p.waitForTimeout(250);
+  await p.locator('[role=dialog] input.money').fill('123456'); await p.locator('[role=dialog] button.primary').click(); await p.waitForTimeout(700);
+  const s7 = await st();
+  ok(s7.book.day.opening === 123456 && s7.book.day.openingManual === true, 'تصفية البارحة typed: 123,456 (kept when earlier days change)');
+  ok((await p.locator('.summary').first().textContent()).includes('١٢٣٬٤٥٦'), '… and the summary shows it');
+
   /* ---------- every page, three widths ---------- */
   for (const [w, h] of [[390, 844], [768, 1024], [1280, 900]]) {
     const q = await br.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: w === 390 ? 2 : 1 }); q.on('pageerror', x => errs.push(w + ' ' + x.message));

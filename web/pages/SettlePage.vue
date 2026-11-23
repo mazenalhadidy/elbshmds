@@ -31,7 +31,10 @@ const lateCount = computed(() => (shop.snap?.late || []).length);
 // closing with a date before the last saved day is allowed, with a warning
 const lastSaved = computed(() => saved.value.filter(d => d.date).map(d => d.date).sort().pop() || null);
 const beforeLast = computed(() => !!(date.value && lastSaved.value && date.value < lastSaved.value));
-const canEditOpening = computed(() => shop.book?.day.seq === 1 && shop.canEdit);
+// تصفية البارحة can be typed: on the first day, or when the day before today was not saved (the copied number may be wrong)
+const yesterday = computed(() => { if (!today.value) return ''; const d = new Date(today.value + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); });
+const gap = computed(() => !!shop.book && shop.book.day.seq !== 1 && !shop.view?.editing && !saved.value.some(d => d.date === yesterday.value));
+const canEditOpening = computed(() => shop.canEdit && !shop.view?.editing && (shop.book?.day.seq === 1 || gap.value));
 // the running total of the saved days (hidden while a saved day is being edited: it would mix two different days)
 const cum = computed(() => (shop.view?.editing ? null : cumulative(saved.value)));
 const uncounted = computed(() => !!shop.book && !shop.book.day.cashChanged && !shop.book.day.networkChanged);
@@ -44,7 +47,7 @@ async function close(pw) {
   catch (e) { throw new Error(e.message); }
   chosen.value = null; toasts.show('تم حفظ التصفية');
 }
-function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'setOpening', value: openingEdit.value })) openingEdit.value = null; }
+function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'setOpening', value: openingEdit.value, ...(gap.value ? { gap: true } : {}) })) openingEdit.value = null; }
 </script>
 <template>
   <div class="page narrow stack" v-if="s">
@@ -86,7 +89,7 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
     </PasswordDialog>
     <DayDialog v-if="dayOpen" :day="dayOpen" @close="dayOpen = null" />
     <LateDialog v-if="lateOpen" @close="lateOpen = false" />
-    <Modal v-if="openingEdit !== null" title="تصفية البارحة لأول يوم" @close="openingEdit = null">
+    <Modal v-if="openingEdit !== null" title="تصفية البارحة" @close="openingEdit = null">
       <MoneyInput v-model="openingEdit" @enter="saveOpening" />
       <template #footer><button class="btn" @click="openingEdit = null">إلغاء</button><button class="btn primary" @click="saveOpening">حفظ</button></template>
     </Modal>

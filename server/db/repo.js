@@ -27,7 +27,7 @@ export async function loadBook(db, dayId) {
   const d = (await db.execute({ sql: 'SELECT * FROM days WHERE id=?', args: [dayId] })).rows[0];
   if (!d) return null;
   const book = {
-    day: { id: d.id, seq: Number(d.seq), date: d.date, status: d.status, opening: d.opening, cash: d.cash, network: d.network,
+    day: { id: d.id, seq: Number(d.seq), date: d.date, status: d.status, opening: d.opening, openingManual: !!d.opening_manual, cash: d.cash, network: d.network,
       cashChanged: !!d.cash_changed, networkChanged: !!d.network_changed, notes: d.notes, closedAt: d.closed_at, orig: parse(d.orig) },
     rows: {}, entries: {}, adjs: {}, comps: {},
   };
@@ -63,7 +63,7 @@ export async function saveItems(tx, before, after, rev) {
 /** Save `after` (a day book), writing only what differs from `before` (null = write everything). `sum` = summarize() result. */
 export async function saveBook(tx, before, after, sum, rev) {
   const d = after.day, closed = d.status === 'closed';
-  const dayRow = { id: d.id, seq: d.seq, date: d.date, status: d.status, opening: d.opening, cash: d.cash, network: d.network,
+  const dayRow = { id: d.id, seq: d.seq, date: d.date, status: d.status, opening: d.opening, opening_manual: b(d.openingManual), cash: d.cash, network: d.network,
     cash_changed: b(d.cashChanged), network_changed: b(d.networkChanged), notes: d.notes || '',
     profit: sum.profit, virtual_total: sum.virtual, real_total: sum.real, diff: sum.diff, closed_at: closed ? d.closedAt : null,
     orig: d.orig ? JSON.stringify(d.orig) : null };

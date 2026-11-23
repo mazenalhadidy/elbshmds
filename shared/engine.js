@@ -45,7 +45,7 @@ const hasCalc = type => type === 'client' || type === 'debt';
 /** A brand-new empty day. opening = تصفية البارحة (null only before the very first day is set up). */
 export function emptyBook(dayId, opening = null, seq = 1) {
   return {
-    day: { id: dayId, seq, date: null, status: 'open', opening, cash: 0, network: 0, cashChanged: false, networkChanged: false, notes: '', closedAt: null },
+    day: { id: dayId, seq, date: null, status: 'open', opening, openingManual: false, cash: 0, network: 0, cashChanged: false, networkChanged: false, notes: '', closedAt: null },
     rows: {},      // itemId -> row
     entries: {},   // entryId -> { id, kind, name, amount, createdAt, late? }
     adjs: {},      // adjustmentId -> { id, amount (+ adds, - subtracts), note, createdAt }
@@ -158,7 +158,8 @@ export function notePart(before, after) {
    (the change flows to all the following days).
    --------------------------------------------------------------------- */
 export function carry(prev, items, next, prevSummary = summarize(prev, items)) {
-  next.day.opening = prevSummary.real;                       // تصفية البارحة = the confirmed real total
+  // تصفية البارحة = the confirmed real total — unless it was typed by hand (the day before it was not saved)
+  if (!next.day.openingManual) next.day.opening = prevSummary.real;
   for (const [id, pr] of Object.entries(prev.rows)) {
     const it = items[id];
     if (!it) { delete next.rows[id]; continue; }
@@ -262,10 +263,13 @@ export function reduce(state, op) {
     case 'setCash': lateRefuse(); d.cash = amountOf(op.value); d.cashChanged = true; return;
     case 'setNetwork': lateRefuse(); d.network = amountOf(op.value); d.networkChanged = true; return;
     case 'setNotes': lateRefuse(); d.notes = String(op.notes ?? ''); return;
-    case 'setOpening': {                                                // only for the very first day (or in past-day edit, by the server)
-      if (!op.force && d.seq !== 1) fail('تصفية البارحة تأتي من اليوم السابق');
+    case 'setOpening': {
+      // the very first day; or a day whose day before was not saved (`gap`, checked by the server: then it is typed by
+      // hand and kept when earlier days change); or a past-day edit (`force`, by the server)
+      if (!op.force && !op.gap && d.seq !== 1) fail('تصفية البارحة تأتي من اليوم السابق');
       d.opening = amountOf(op.value);
-      if (!op.force && d.orig) d.orig = { ...d.orig, opening: d.opening };   // the first day's own setting: never shown crossed out
+      if (op.gap) d.openingManual = true;
+      if (!op.force && d.orig) d.orig = { ...d.orig, opening: d.opening };   // the day's own setting: never shown crossed out
       return;
     }
     case 'addAdj': {                                                    // manual + / − on the real total, with a note

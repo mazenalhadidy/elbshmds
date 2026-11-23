@@ -156,3 +156,37 @@ describe('devices', () => {
     s.close();
   });
 });
+
+describe('تصفية البارحة typed by hand', () => {
+  it('allowed only when the day before today was not saved; kept when an earlier day changes, and after a restart', async () => {
+    const now = () => new Date('2026-05-10T12:00:00Z');
+    const s = await boot({ now });
+    await s.call('POST', '/setup', { opening: 1000 });
+    let r = await s.call('POST', '/ops', { ops: [op({ t: 'addItem', id: 'w1', type: 'wallet', name: '0101', amount: 5000 }), op({ t: 'setCash', value: 0 })] });
+    r = await s.call('POST', '/close', { dayId: r.body.book.day.id, date: '2026-05-08', password: 'pw' });   // 9 May was not saved
+    expect(r.body.book.day.opening).toBe(5000);
+    r = await s.call('POST', '/ops', { ops: [op({ t: 'setOpening', value: 7300, gap: true })] });
+    expect(r.body.rejected).toEqual([]);
+    expect(r.body.book.day).toMatchObject({ opening: 7300, openingManual: true });
+    expect(r.body.book.day.orig.opening).toBe(7300);                              // its own value: not crossed out
+    // an edit of the day before does not overwrite it
+    const d1 = r.body.days[0].id;
+    r = await s.call('POST', `/days/${d1}/edit`, { ops: [op({ t: 'setValue', id: 'w1', value: 6000 })], note: 'x', password: 'pw' });
+    expect(r.status).toBe(200);
+    expect((await s.call('GET', '/state')).body.book.day.opening).toBe(7300);
+    // after a restart too
+    const dir = s.dataDir; s.close();
+    const s2 = await boot({ dataDir: dir, now });
+    expect((await s2.call('GET', '/state')).body.book.day).toMatchObject({ opening: 7300, openingManual: true });
+    // without `gap` (a normal day) it is refused
+    expect((await s2.call('POST', '/ops', { ops: [op({ t: 'setOpening', value: 1 })] })).body.rejected).toHaveLength(1);
+    // once yesterday (9 May) is saved, the next day takes the saved total and cannot be typed
+    r = await s2.call('POST', '/ops', { ops: [op({ t: 'setCash', value: 0 })] });
+    r = await s2.call('POST', '/close', { dayId: r.body.book.day.id, date: '2026-05-09', password: 'pw' });
+    expect(r.body.book.day.openingManual).toBe(false);
+    const x = await s2.call('POST', '/ops', { ops: [op({ t: 'setOpening', value: 99, gap: true })] });
+    expect(x.body.rejected).toHaveLength(1);
+    expect(x.body.book.day.opening).toBe(r.body.book.day.opening);
+    s2.close();
+  });
+});

@@ -102,7 +102,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
         for (const o of lateOps) seen.add(o.opId);
       }
       const state = { items: clone(items), book: clone(open) };
-      const { done, rejected } = applyAll(state, fresh.map(fromOld));
+      const { done, rejected } = applyAll(state, fresh.map(fromOld).map(gapCheck));
       if (fresh.length) await write(async (tx, r) => {
         await saveItems(tx, items, state.items, r);
         await saveBook(tx, open, state.book, summarize(state.book, state.items), r);
@@ -160,7 +160,7 @@ export async function createShop(db, { now = () => new Date() } = {}) {
       if (!preview && !String(note || '').trim()) throw new UserError('اكتب سبب التعديل');
       const st = { items: clone(items), book: clone(target) };
       // the first day's تصفية البارحة can be changed only here
-      const fixed = ops.map(fromOld).map(o => (o.t === 'setOpening' && target.day.seq === 1 ? { ...o, force: true } : o));
+      const fixed = ops.map(fromOld).map(o => { const { gap: _g, ...x } = o; return x.t === 'setOpening' && target.day.seq === 1 ? { ...x, force: true } : x; });
       const { rejected } = applyAll(st, fixed.map(o => ({ ...o, dayId: undefined })));
       if (rejected.length) throw new UserError('تعديل غير صالح: ' + rejected[0].error);
       const { books, changes } = await cascade(target, st);
@@ -465,6 +465,18 @@ export async function createShop(db, { now = () => new Date() } = {}) {
     return debtIds.length;
   }
   await mergePeople();
+  /**
+   * «تصفية البارحة» typed by hand on the open day: only when the day before today was NOT saved (the number copied from
+   * an older saved day may be wrong). Otherwise the request loses its `gap` and the engine refuses it.
+   */
+  const gapCheck = o => {
+    if (o?.t !== 'setOpening' || !o.gap) return o;
+    const t = today(), d = new Date(t + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1);
+    const yesterday = d.toISOString().slice(0, 10);
+    const ok = open && open.day.seq !== 1 && !days.some(x => x.status === 'closed' && x.date === yesterday);
+    if (ok) return o;
+    const { gap: _g, ...rest } = o; return rest;
+  };
   /** A change a phone wrote for an old debt before the update: same person, and its change seen from the other side. */
   const fromOld = o => {
     const c = o && converted[o.id]; if (!c) return o;
