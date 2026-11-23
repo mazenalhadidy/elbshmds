@@ -121,3 +121,15 @@ details.fold[open] > summary .chev { transform: rotate(180deg); }
 .seg button.on { background: #fff; color: var(--brand); font-weight: 650; box-shadow: var(--shadow); }
 @media (min-width: 900px) { .phone-only { display: none !important; } }
 @media (max-width: 899px) { .desk-only { display: none !important; } }
+
+/* ---------- phones: easy typing ---------- */
+html { overscroll-behavior-y: contain; }                     /* no reload by pulling the page down by mistake */
+button, a, input, textarea, select, .cell-btn { touch-action: manipulation; }   /* no double-tap zoom, no tap delay */
+body.typing .bottom { display: none; }                    /* the keyboard is open: room for the field, not the menu */
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px; }             /* iPhone does not zoom in on a field */
+  .btn.icon { width: 40px; min-height: 40px; }             /* finger-sized */
+  .btn.sm { min-height: 40px; }
+  .cell-btn { min-height: 32px; padding: 6px 8px; margin: -6px -8px; }
+  .seg button { min-height: 40px; }
+}

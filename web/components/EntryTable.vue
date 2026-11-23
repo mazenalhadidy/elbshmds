@@ -10,6 +10,7 @@ import { useToasts } from '@/stores/toasts.js';
 import { uid } from '@/lib/api.js';
 import { fmt, toArabicDigits } from '@shared/money.js';
 import MoneyInput from './MoneyInput.vue';
+import { touch } from '@/lib/mobile.js';
 import Money from './Money.vue';
 import Icon from './Icon.vue';
 
@@ -23,6 +24,9 @@ const time = s => (s ? toArabicDigits(new Date(s).toLocaleTimeString('en-GB', { 
 /* ----- the "add" row ----- */
 const amount = ref(''), name = ref(''), amountEl = ref(null), nameEl = ref(null);
 // letters typed in the amount go straight on in the name field
+// on a phone the number keyboard has no letters: Enter («التالي») goes to the name, Enter there («تم») adds and the
+// cursor comes back to the amount (the keyboard stays open). With a real keyboard Enter adds at once.
+function amountEnter() { if (touch && amount.value !== '' && !name.value) nameEl.value?.focus(); else add(); }
 function toName(t) { name.value += t; nextTick(() => { const el = nameEl.value; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }); }
 function add() {
   if (amount.value === '' || !(amount.value > 0)) { amountEl.value?.focus(); return; }
@@ -53,8 +57,8 @@ defineExpose({ focus: () => amountEl.value?.focus() });
   <section class="card">
     <div class="card-h"><h2>{{ title }}</h2><span class="muted small num">{{ toArabicDigits(rows.length) }} سجل</span></div>
     <form class="addrow" @submit.prevent="add">
-      <MoneyInput ref="amountEl" v-model="amount" :placeholder="'المبلغ'" style="flex:1" :disabled="!shop.canEdit" @enter="add" @letters="toName" aria-label="المبلغ" />
-      <input ref="nameEl" v-model="name" class="input" style="flex:1.3" placeholder="الاسم (اختياري)" :disabled="!shop.canEdit" @keydown.enter.prevent="add" aria-label="الاسم" />
+      <MoneyInput ref="amountEl" v-model="amount" :placeholder="'المبلغ'" style="flex:1" :disabled="!shop.canEdit" @enter="amountEnter" @letters="toName" :enterkeyhint="touch ? 'next' : 'enter'" aria-label="المبلغ" />
+      <input ref="nameEl" v-model="name" class="input" style="flex:1.3" placeholder="الاسم (اختياري)" :disabled="!shop.canEdit" enterkeyhint="done" autocomplete="off" @keydown.enter.prevent="add" aria-label="الاسم" />
       <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit" aria-label="إضافة"><Icon name="plus" /></button>
     </form>
     <div class="scroll">

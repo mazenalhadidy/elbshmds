@@ -16,13 +16,16 @@ const save = (t, v) => {
   if (v !== '' && (v !== cur || !counted) && shop.dispatch({ t, value: v }, { quiet: true })) typed = true;
 };
 const done = label => { if (typed) { toasts.show('تم حفظ ' + label); typed = false; } };
+// Enter: from النقدية to المكن; from المكن the keyboard closes (both are saved as you type)
+const toNet = () => document.getElementById('net')?.focus();
+const blurNet = () => document.getElementById('net')?.blur();
 </script>
 <template>
   <section class="card">
     <div class="card-h"><h2>النقدية والمكن</h2></div>
     <div class="card-b grid2">
-      <div><label class="label" for="cash">النقدية الموجودة في المحل</label><MoneyInput id="cash" v-model="cash" :disabled="!shop.canEdit" @update:model-value="v => save('setCash', v)" @blur="done('النقدية')" /></div>
-      <div><label class="label" for="net">المكن</label><MoneyInput id="net" v-model="net" :disabled="!shop.canEdit" @update:model-value="v => save('setNetwork', v)" @blur="done('المكن')" /></div>
+      <div><label class="label" for="cash">النقدية الموجودة في المحل</label><MoneyInput id="cash" v-model="cash" :disabled="!shop.canEdit" enterkeyhint="next" @enter="toNet" @update:model-value="v => save('setCash', v)" @blur="done('النقدية')" /></div>
+      <div><label class="label" for="net">المكن</label><MoneyInput id="net" v-model="net" :disabled="!shop.canEdit" enterkeyhint="done" @enter="blurNet" @update:model-value="v => save('setNetwork', v)" @blur="done('المكن')" /></div>
     </div>
   </section>
 </template>

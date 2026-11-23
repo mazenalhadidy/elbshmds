@@ -41,4 +41,6 @@ const tip = computed(() => {
 @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .15; } }
 .failed { min-width: 22px; height: 22px; border-radius: 11px; border: 0; background: var(--neg); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 @media (min-width: 900px) { .status { bottom: 16px; } }
+/* phones: the same small circle, a finger-sized touch area around it */
+@media (pointer: coarse) { .dot::before { content: ''; position: absolute; inset: -14px; border-radius: 50%; } }
 </style>

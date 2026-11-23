@@ -19,7 +19,7 @@ async function go() {
     <slot />
     <form @submit.prevent="go">
       <label class="label" for="pw">كلمة المرور</label>
-      <input id="pw" ref="input" v-model="pw" class="input" type="password" autocomplete="current-password" />
+      <input id="pw" ref="input" v-model="pw" class="input" type="password" autocomplete="current-password" enterkeyhint="done" />
       <p v-if="err" class="hint neg" role="alert">{{ err }}</p>
       <button class="btn wide" :class="danger ? 'danger' : 'primary'" style="margin-top:14px" :disabled="busy || !pw">{{ busy ? '...' : confirmText }}</button>
     </form>

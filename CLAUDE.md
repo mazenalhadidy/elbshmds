@@ -24,6 +24,7 @@ described there; extend it. Every change is small and in the existing style.
   replay from scratch) must stay green, and `tests/e2e/walk.cjs` (the real screens, two days, an edit of the previous
   day, a تعويض, every page at 390/768/1280) must print ALL PASSED before a release. Extend both with every new feature.
   (cascade.test.js runs on Linux only: on Windows the test process crashes after ~40 test databases in a row.)
+  `tests/e2e/mobile.cjs` (a real phone profile) must print ALL PASSED too.
 
 ## UI rules (he asked for each of these)
 - Language: **Modern Standard Arabic** (not Egyptian dialect) in the UI and in the AI's instructions/explanations.
@@ -56,6 +57,12 @@ described there; extend it. Every change is small and in the existing style.
   red «فصل» (password): its login stops at once (`data/disconnected-devices.json`); it can log in again with the password.
 - Jumping between fields (never in المحافظ): اليومية and الإضافة/الخصم — letters typed after the amount go on in the
   name/reason field (which may hold digits); العملاء / الديون / الثوابت — digits typed after the name go to the amount.
+- **Phones** (`web/lib/mobile.js`, `(pointer: coarse)`): fields 16 px (no zoom); every field has its Enter key
+  (`enterkeyhint` التالي / تم) and Enter moves to the next field; after adding, the cursor is back on the first field
+  (the keyboard stays open); in اليومية on a phone Enter on the amount goes to the name (no letters on the number
+  keyboard), Enter there adds (a real keyboard: Enter adds at once). While typing the bottom menu hides and the field
+  is scrolled to the middle; buttons ≥ 40 px (small arrows / the status circle get a larger invisible touch area);
+  pulling the page down does not reload it.
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 
 ## Accounting decisions (do not change without asking)

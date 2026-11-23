@@ -14,7 +14,7 @@ async function go() {
   <form class="card center" @submit.prevent="go">
     <img src="/icon.svg" width="56" height="56" alt="" />
     <h1>محل الباشمهندس</h1>
-    <input v-model="pw" class="input" type="password" placeholder="كلمة المرور" autocomplete="current-password" autofocus aria-label="كلمة المرور" />
+    <input v-model="pw" class="input" type="password" placeholder="كلمة المرور" autocomplete="current-password" enterkeyhint="go" autofocus aria-label="كلمة المرور" />
     <p v-if="err" class="hint neg" role="alert">{{ err }}</p>
     <button class="btn primary wide" style="margin-top:14px" :disabled="busy || !pw">دخول</button>
   </form>

@@ -119,4 +119,6 @@ const was = key => {
 .more:hover { background: #e7defa; }
 .more.on { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) { .more { transition: none; } }
+/* phones: the same small arrow, a finger-sized touch area around it */
+@media (pointer: coarse) { .more { border: 7px solid transparent; background-clip: padding-box; margin: -7px; box-sizing: content-box; } }
 </style>

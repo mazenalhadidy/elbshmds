@@ -134,10 +134,10 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
     <form class="addrow" @submit.prevent="add">
       <div class="find" style="flex:1.2">
         <Icon v-if="type !== 'constant'" name="search" :size="16" class="find-ic" />
-        <input v-if="type === 'wallet'" ref="firstEl" v-model="first" class="input pad" :class="{ dup: duplicate }" :placeholder="T.first" dir="auto" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
-        <input v-else ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate, pad: type !== 'constant' }" :placeholder="T.first" :disabled="!shop.canEdit && type === 'constant'" @input="onFirst" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
+        <input v-if="type === 'wallet'" ref="firstEl" v-model="first" class="input pad" :class="{ dup: duplicate }" :placeholder="T.first" dir="auto" enterkeyhint="next" autocomplete="off" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
+        <input v-else ref="firstEl" v-model="first" class="input" :class="{ dup: duplicate, pad: type !== 'constant' }" :placeholder="T.first" :disabled="!shop.canEdit && type === 'constant'" @input="onFirst" enterkeyhint="next" autocomplete="off" @keydown.enter.prevent="secondEl.focus()" :aria-label="T.first" data-test="item-first" />
       </div>
-      <MoneyInput ref="secondEl" v-model="second" style="flex:1" :placeholder="T.second" :allow-negative="type !== 'constant'" :disabled="!shop.canEdit" @enter="add" :aria-label="T.second" />
+      <MoneyInput ref="secondEl" v-model="second" style="flex:1" :placeholder="T.second" :allow-negative="type !== 'constant'" :disabled="!shop.canEdit" enterkeyhint="done" @enter="add" :aria-label="T.second" />
       <button class="btn primary icon" style="width:42px;min-height:38px;color:#fff" :disabled="!shop.canEdit || duplicate" aria-label="إضافة"><Icon name="plus" /></button>
     </form>
     <div v-if="others.length" class="others" data-test="others">
