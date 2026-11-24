@@ -98,6 +98,9 @@ described there; extend it. Every change is small and in the existing style.
 - The launcher (`scripts/updater.js`) only PREPARES a new version from GitHub `main` (download, install, build,
   tests). Nothing is installed by itself: the app shows «تحديث متاح»; it installs only after the button + the
   update password (`UPDATE_PASSWORD` in `.env`, chosen by the owner; not the login password).
+- الإدارة → «البرنامج وقاعدة البيانات» says why the button does (not) show: the launcher is alive (`aliveAt`
+  heartbeat; otherwise «لم يُشغَّل من start-shop.cmd»), GITHUB_REPO / UPDATE_PASSWORD missing, the last error.
+  «افحص الآن» checks at once and retries a version that failed to prepare. The PC's own tests get long timeouts.
 - The switch must never lose data: graceful stop (requests finish, last Turso push, DB closed), DB copied to
   `data/backups/before-update-<sha>/`, new version started; if it is not healthy the copy is put back and the old
   version starts. Phones keep unsent changes on the phone and send them after (same opId, never twice).

@@ -36,6 +36,14 @@ seconds: changes being saved finish first, the database is copied to `data\backu
 version does not start, the copy is put back and the old version runs again. Phones keep their unsent changes and send
 them when the program is back.
 
+### «تحديث متاح» does not appear?
+Open الإدارة → «البرنامج وقاعدة البيانات». It says what is wrong:
+- «لم يُشغَّل من start-shop.cmd»: close the black window and start the program with start-shop.cmd (or its shortcut).
+- «أضف GITHUB_REPO…» / «أضف UPDATE_PASSWORD…»: add the line to `.env`, save, start again.
+- «تعذّر تجهيز التحديث…»: open «سبب آخر خطأ» and send it; «افحص الآن» tries again.
+- «البرنامج محدّث»: there is nothing new. «بانتظار انتهاء الاختبارات على GitHub»: wait a few minutes.
+Preparing a new version takes a few minutes (it downloads, installs and tests it in the background).
+
 ## 5. Make it easy
 - **make-desktop-shortcut.cmd** (once): an icon on the Desktop.
 - **autostart-install.cmd** (once): starts by itself, minimized, every time you log in. **autostart-remove.cmd** undoes it. **stop-shop.cmd** stops it.

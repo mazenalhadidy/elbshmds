@@ -34,6 +34,7 @@ const BRANCH = env.GITHUB_BRANCH || 'main';
 const TOKEN = env.GITHUB_TOKEN || '';                     // needed only if the repository is private (read-only token)
 const EVERY = (Number(env.UPDATE_CHECK_MINUTES) || 10) * 60e3;
 const REQUEST = path.join(DATA, 'update-request.json');
+const CHECK_NOW = path.join(DATA, 'update-check.json');   // «افحص الآن» on the screen
 
 const log = (...a) => { const line = `[${new Date().toISOString()}] ${a.join(' ')}`; console.log(line); try { if (fs.existsSync(LOG) && fs.statSync(LOG).size > 5e6) fs.renameSync(LOG, LOG + '.old'); fs.appendFileSync(LOG, line + '\n'); } catch { /* ignore */ } };
 const readJson = (f, d = null) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return d; } };
@@ -57,7 +58,8 @@ function run(cmd, args, cwd, timeoutMs = 15 * 60e3) {
 async function prepare(dir, { force = false, test = false } = {}) {
   if (force || !fs.existsSync(path.join(dir, 'node_modules'))) { log('installing packages in', dir); await run('npm', [fs.existsSync(path.join(dir, 'package-lock.json')) ? 'ci' : 'install', '--no-audit', '--no-fund'], dir); }
   if (force || !fs.existsSync(path.join(dir, 'dist', 'index.html'))) { log('building screens in', dir); await run('npm', ['run', 'build'], dir); }
-  if (test) { log('running tests in', dir); await run('npm', ['run', 'test:quick'], dir); }
+  // the tests again on THIS computer (a slow one gets plenty of time: a timeout must never reject a good version)
+  if (test) { log('running tests in', dir); await run('npm', ['run', 'test:quick', '--', '--testTimeout=180000', '--hookTimeout=180000'], dir); }
 }
 
 /* ---------- the server process ---------- */
@@ -136,19 +138,27 @@ async function check() {
     status({ ready: sha, notes: String(latest.commit?.message || '').split('\n')[0].slice(0, 200), message: 'يوجد تحديث جاهز', lastError: null });
     log('version', sha.slice(0, 7), 'is ready — waiting for «تحديث البرنامج»');
   } catch (e) {
+    const preparingFailed = !!preparing;
     if (preparing) {                                   // the new version could not be installed / its tests failed on this computer
       writeJson(path.join(DATA, 'bad-versions.json'), [...readJson(path.join(DATA, 'bad-versions.json'), []), preparing]);
       fs.rmSync(path.join(HOME, 'app', preparing.slice(0, 12)), { recursive: true, force: true });
       preparing = null;
     }
     log('update check:', e.message);
-    status({ lastError: e.message, message: 'تعذّر فحص التحديث (الإنترنت؟) — سيُعاد المحاولة', checkedAt: new Date().toISOString() });
+    status({ lastError: e.message.slice(-1200), message: preparingFailed ? 'تعذّر تجهيز التحديث على هذا الجهاز' : 'تعذّر فحص التحديث (الإنترنت؟) — سيُعاد المحاولة', checkedAt: new Date().toISOString() });
   } finally { checking = false; }
 }
 /* ---------- the switch: only when someone asked for it (button + update password) ---------- */
 const DB_FILES = ['shop-v3.db', 'shop-v3.db-wal', 'shop-v3.db-shm'];
 let switching = false;
 async function watchRequest() {
+  // «افحص الآن»: check at once; a version that failed to prepare before is tried again
+  if (fs.existsSync(CHECK_NOW) && !checking && !switching) {
+    fs.rmSync(CHECK_NOW, { force: true });
+    const latest = readJson(STATUS, {}).latest;
+    if (latest) writeJson(path.join(DATA, 'bad-versions.json'), readJson(path.join(DATA, 'bad-versions.json'), []).filter(x => x !== latest));
+    log('check requested from the screen'); check();
+  }
   if (switching || checking || !fs.existsSync(REQUEST)) return;
   const req = readJson(REQUEST, {}); fs.rmSync(REQUEST, { force: true });
   const st = readJson(STATUS, {}), sha = st.ready;
@@ -214,9 +224,11 @@ try {
   startServer(a.dir);
   if (process.argv.includes('--open')) healthy().then(h => { if (h) spawn(process.platform === 'win32' ? 'cmd' : 'xdg-open', process.platform === 'win32' ? ['/c', 'start', '', `http://localhost:${PORT}`] : [`http://localhost:${PORT}`], { detached: true, stdio: 'ignore' }).unref(); });
   fs.rmSync(REQUEST, { force: true });                     // an old request never installs anything by itself
-  status({ switching: false });
+  // «the launcher is running» (the screen tells «not started with start-shop.cmd» from other problems)
+  const alive = () => status({ switching, aliveAt: new Date().toISOString(), repo: REPO || null });
+  alive(); setInterval(alive, 60e3);
   if (REPO) { log(`updates: checking ${REPO} (${BRANCH}) every ${EVERY / 60e3} minutes; installed only from the button`); setTimeout(check, (Number(env.UPDATE_FIRST_CHECK_SECONDS) || 60) * 1000); setInterval(check, EVERY); setInterval(watchRequest, 3000); }
-  else { log('updates are off (GITHUB_REPO is empty in .env)'); status({ message: 'التحديث غير مفعّل', ready: null }); }
+  else { log('updates are off (GITHUB_REPO is empty in .env)'); status({ message: 'التحديث غير مفعّل', ready: null }); setInterval(() => { if (fs.existsSync(CHECK_NOW)) fs.rmSync(CHECK_NOW, { force: true }); }, 3000); }
 } catch (e) {
   log('START FAILED: ' + e.message);
   process.exit(1);

@@ -154,13 +154,18 @@ export function createApp({ shop, cfg, sync = null, db = null, log = console }) 
 
   // management page: phones, devices, version, Turso
   app.get('/api/system', (req, res) => send(res, async () => ({
-    version: readVersion(cfg), update: readJson(path.join(cfg.dataDir, 'update-status.json')),
+    version: readVersion(cfg), update: readJson(path.join(cfg.dataDir, 'update-status.json')), updatePassword: !!cfg.updatePassword,
     turso: sync ? { ...sync.status } : { configured: false },
     phoneUrls: lanUrls(cfg.port), devices: devices.list(), thisDevice: cid(req), lock: lock.info(cid(req)),
   })));
   app.get('/api/export', (req, res) => send(res, async () => { res.set('Content-Disposition', `attachment; filename="elbshmds-backup-${new Date().toISOString().slice(0, 10)}.json"`); return shop.exportAll(); }));
   /* ----- «تحديث البرنامج»: the launcher prepares a new version; it is installed ONLY when someone presses the button
      and types the update password (UPDATE_PASSWORD). The launcher reads the request file and switches safely. ----- */
+  // «افحص الآن»: the launcher checks GitHub at once (and tries again a version that failed to prepare)
+  app.post('/api/update/check', (req, res) => send(res, async () => {
+    fs.writeFileSync(path.join(cfg.dataDir, 'update-check.json'), JSON.stringify({ at: new Date().toISOString() }));
+    return { ok: true };
+  }));
   app.post('/api/update', (req, res) => send(res, async () => {
     if (!cfg.updatePassword) throw new UserError('كلمة مرور التحديث غير مضبوطة (UPDATE_PASSWORD في الإعدادات)', 400);
     const e = updateAuth.check(req.ip, req.body?.password); if (e) throw new UserError(e.error, e.code);
