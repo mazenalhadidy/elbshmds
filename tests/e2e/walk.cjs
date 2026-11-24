@@ -193,6 +193,19 @@ const ok = (c, msg) => { console.log((c ? '✓ ' : '✗ ') + msg); if (!c) fails
   const s9 = await until(x => x.book.day.cash === 4300);
   ok(s9.book.day.cash === 4300, `and changed again from الإدارة — server: ${s9.book.day.cash}`);
 
+  /* ---------- الثوابت: change the amount, its history shows each day's change ---------- */
+  await go('/manage');
+  const kc = p.locator('section', { hasText: 'الثوابت' }).first();
+  await kc.locator('tbody tr', { hasText: 'إيجار' }).locator('td.n button').click(); await p.waitForTimeout(200);
+  await p.keyboard.press('Control+A'); await p.keyboard.type('1700'); await p.keyboard.press('Enter'); await p.waitForTimeout(400);
+  const s10 = await until(x => Object.entries(x.book.rows).some(([id, r]) => x.items[id]?.name === 'إيجار' && r.value === 1700));
+  ok(!!s10 && s10.summary.constants === 1700, 'الثوابت: إيجار 1,500 → 1,700 by editing its amount');
+  await kc.locator('tbody tr', { hasText: 'إيجار' }).locator('[data-test=history]').click(); await p.waitForTimeout(900);
+  const ch = (await p.locator('[data-test=hist-change]').allTextContents()).map(x => x.trim());
+  ok(ch[0] === '+٢٠٠' && ch[ch.length - 1] === '—', `its history: today +200, the first day — (${ch.join(' / ')})`);
+  await (await p.$('[role=dialog]')).screenshot({ path: dir + '/walk-constant-history.png' });
+  await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+
   /* ---------- every page, three widths ---------- */
   for (const [w, h] of [[390, 844], [768, 1024], [1280, 900]]) {
     const q = await br.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: w === 390 ? 2 : 1 }); q.on('pageerror', x => errs.push(w + ' ' + x.message));

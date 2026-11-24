@@ -18,6 +18,8 @@ onMounted(async () => {
   catch (e) { err.value = e.status ? e.message : 'السجل يحتاج اتصالًا بجهاز المحل'; }
 });
 function rename() { if (newName.value.trim() && newName.value.trim() !== props.name && shop.dispatch({ t: 'renameItem', id: props.id, name: newName.value })) renaming.value = false; }
+// wallet / constant: how much each day changed it from the day before (+ more, − less); the first day: —
+const delta = k => { const r = rows.value[k], older = rows.value[k + 1]; if (!older) return null; const d = Math.round((r.value - older.value) * 100) / 100; return d; };
 const dayLabel = r => (r.open ? 'اليوم الحالي' : fmtDate(r.date));
 </script>
 <template>
@@ -33,16 +35,19 @@ const dayLabel = r => (r.open ? 'اليوم الحالي' : fmtDate(r.date));
     <p v-else-if="!rows" class="muted">جارٍ التحميل…</p>
     <div v-else class="scroll card">
       <table class="tbl">
-        <thead><tr><th>اليوم</th><template v-if="isCalc"><th class="n">البداية</th><th class="n">التغيير</th><th class="n">النهائي</th></template><th v-else class="n">{{ type === 'wallet' ? 'الرصيد' : 'المبلغ' }}</th><th></th></tr></thead>
+        <thead><tr><th>اليوم</th><template v-if="isCalc"><th class="n">البداية</th><th class="n">التغيير</th><th class="n">النهائي</th></template><template v-else><th class="n">{{ type === 'wallet' ? 'الرصيد' : 'المبلغ' }}</th><th class="n">التغيير</th></template><th></th></tr></thead>
         <tbody>
-          <tr v-for="r in rows" :key="r.dayId" :class="{ deleted: r.status === 'deleted' }">
+          <tr v-for="(r, k) in rows" :key="r.dayId" :class="{ deleted: r.status === 'deleted' }" data-test="hist-row">
             <td class="num">{{ dayLabel(r) }}</td>
             <template v-if="isCalc">
               <td class="n num">{{ bal(r.opening) }}</td>
               <td class="n num muted" :title="r.calc">{{ r.calc ? fmtSigned(S * evalCalc(r.calc) || 0) : '—' }}</td>
               <td class="n num"><b>{{ bal(r.opening + (evalCalc(r.calc) || 0)) }}</b></td>
             </template>
-            <td v-else class="n num">{{ fmt(r.value) }}</td>
+            <template v-else>
+              <td class="n num"><b>{{ fmt(r.value) }}</b></td>
+              <td class="n num" :class="delta(k) > 0 ? 'up' : delta(k) < 0 ? 'down' : 'muted'" data-test="hist-change">{{ delta(k) == null ? '—' : delta(k) ? fmtSigned(delta(k)) : '٠' }}</td>
+            </template>
             <td class="small muted">{{ r.status === 'deleted' ? 'محذوف' : type === 'wallet' && !r.active ? 'غير مستخدمة' : '' }}</td>
           </tr>
         </tbody>
@@ -50,3 +55,6 @@ const dayLabel = r => (r.open ? 'اليوم الحالي' : fmtDate(r.date));
     </div>
   </Modal>
 </template>
+<style scoped>
+.up { color: var(--brand-ink); } .down { color: var(--neg); }
+</style>

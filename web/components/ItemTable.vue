@@ -185,6 +185,7 @@ const restore = x => shop.dispatch({ t: 'restoreItem', id: x.id });
                 <button v-if="!shop.view?.editing" class="btn icon del" title="حذف نهائي" aria-label="حذف نهائي" :disabled="!shop.canEdit" @click="deleteFor = { ...x, onlyPurge: true }"><Icon name="trash" /></button>
               </template>
               <button v-else class="btn icon del" title="حذف" aria-label="حذف" :disabled="!shop.canEdit" @click="deleteFor = x"><Icon name="trash" /></button>
+              <button v-if="type === 'constant'" class="btn icon" title="السجل" aria-label="السجل" data-test="history" @click="historyFor = x"><Icon name="history" /></button>
             </td>
           </tr>
         </tbody>

@@ -20,6 +20,10 @@ described there; extend it. Every change is small and in the existing style.
 - Reply in English, short and plain; Arabic only for the exact UI words.
 - Before finishing: `npm run lint`, `npm test`, `npm run build` (and `npm test` in wa-debt-checker if it changed).
   Check the screen in the browser (Playwright, phone 390 px and 1280 px) — measure, don't guess.
+- **He does not tolerate failures** (a past-day edit once broke all later days). After EVERY change, before pushing:
+  `npm test` (incl. the random weeks), `node tests/e2e/walk.cjs` and `node tests/e2e/mobile.cjs` on a fresh server — all
+  green, or nothing is pushed. Every new feature gets its own checks in them. Prove a new test catches the bug (break
+  the code once, see it fail).
 - **Solid first**: `tests/cascade.test.js` (random weeks, every kind of past-day edit / تعويض, each day compared with a
   replay from scratch) must stay green, and `tests/e2e/walk.cjs` (the real screens, two days, an edit of the previous
   day, a تعويض, every page at 390/768/1280) must print ALL PASSED before a release. Extend both with every new feature.
@@ -65,6 +69,8 @@ described there; extend it. Every change is small and in the existing style.
   pulling the page down does not reload it.
 - النقدية / المكن: typed in الإدارة, and also from «التصفية» (tap the number, or «بانتظار عدّ النقدية»): both fields
   together, Enter goes on. A counted 0 shows «٠» (empty = not typed yet).
+- الثوابت (and المحافظ): tap the amount to change it; the history (tap the name, or the ⟲ icon on a constant's row)
+  shows each day's amount and its change from the day before (+ / −).
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 
 ## Accounting decisions (do not change without asking)
