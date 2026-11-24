@@ -7,9 +7,11 @@ import { useToasts } from '@/stores/toasts.js';
 const toasts = useToasts();
 let typed = false;   // a value was typed: say "saved" when you leave the field
 const shop = useShop();
-const cash = ref(shop.book?.day.cash || ''), net = ref(shop.book?.day.network || '');
-watch(() => shop.book?.day.cash, v => { if (document.activeElement?.id !== 'cash') cash.value = v || ''; });
-watch(() => shop.book?.day.network, v => { if (document.activeElement?.id !== 'net') net.value = v || ''; });
+// a counted 0 shows «٠» (it is not the same as «not typed yet», which stays empty)
+const shown = (v, counted) => (counted ? v ?? 0 : v || '');
+const cash = ref(shown(shop.book?.day.cash, shop.book?.day.cashChanged)), net = ref(shown(shop.book?.day.network, shop.book?.day.networkChanged));
+watch(() => [shop.book?.day.cash, shop.book?.day.cashChanged], ([v, c]) => { if (document.activeElement?.id !== 'cash') cash.value = shown(v, c); });
+watch(() => [shop.book?.day.network, shop.book?.day.networkChanged], ([v, c]) => { if (document.activeElement?.id !== 'net') net.value = shown(v, c); });
 // typing the same value still counts the first time (a real 0 means "counted: nothing"), so the gap can show
 const save = (t, v) => {
   const d = shop.book.day, cur = t === 'setCash' ? d.cash : d.network, counted = t === 'setCash' ? d.cashChanged : d.networkChanged;

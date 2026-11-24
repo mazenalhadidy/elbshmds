@@ -63,6 +63,8 @@ described there; extend it. Every change is small and in the existing style.
   keyboard), Enter there adds (a real keyboard: Enter adds at once). While typing the bottom menu hides and the field
   is scrolled to the middle; buttons ≥ 40 px (small arrows / the status circle get a larger invisible touch area);
   pulling the page down does not reload it.
+- النقدية / المكن: typed in الإدارة, and also from «التصفية» (tap the number, or «بانتظار عدّ النقدية»): both fields
+  together, Enter goes on. A counted 0 shows «٠» (empty = not typed yet).
 - A value changed after a day was closed is shown **crossed out next to the new value**.
 
 ## Accounting decisions (do not change without asking)

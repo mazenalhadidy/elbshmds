@@ -22,12 +22,13 @@ import Icon from './Icon.vue';
 const props = defineProps({
   s: Object,
   editableOpening: Boolean,
+  editableCash: Boolean,                       // النقدية / المكن can be changed from here (the open day, or a saved day being edited)
   uncounted: Boolean,                          // today's cash and network not typed yet: the gap is not a real shortage
   cumulative: { type: Number, default: null }, // sum of the saved days before this one (null = don't show the group)
   orig: { type: Object, default: null },       // the values the day was closed with
   crossAll: Boolean,
 });
-const emit = defineEmits(['edit-opening']);
+const emit = defineEmits(['edit-opening', 'edit-cash']);
 const openReal = ref(false), openProfit = ref(false);
 
 const waiting = computed(() => props.uncounted && !!props.s.diff);
@@ -69,8 +70,8 @@ const was = key => {
     <div v-if="openReal" class="parts small">
       <div class="between"><span>العملاء</span><span>+ <Was :was="was('clients')" :v="s.clients" plain /></span></div>
       <div class="between"><span>المحافظ</span><span>+ <Was :was="was('wallets')" :v="s.wallets" plain /></span></div>
-      <div class="between"><span>النقدية</span><span>+ <Was :was="was('cash')" :v="s.cash" plain /></span></div>
-      <div class="between"><span>المكن</span><span>+ <Was :was="was('network')" :v="s.network" plain /></span></div>
+      <div class="between"><span>النقدية</span><span>+ <button v-if="editableCash" class="cell-btn editable" data-test="edit-cash" @click="emit('edit-cash', 'cash')"><Was :was="was('cash')" :v="s.cash" plain /></button><Was v-else :was="was('cash')" :v="s.cash" plain /></span></div>
+      <div class="between"><span>المكن</span><span>+ <button v-if="editableCash" class="cell-btn editable" data-test="edit-net" @click="emit('edit-cash', 'network')"><Was :was="was('network')" :v="s.network" plain /></button><Was v-else :was="was('network')" :v="s.network" plain /></span></div>
       <div class="between"><span>ديون</span><span>− <Was :was="was('debts')" :v="s.debts" plain /></span></div>
       <div class="between"><span>الثوابت</span><span>− <Was :was="was('constants')" :v="s.constants" plain /></span></div>
       <div v-if="s.adjustments" class="between"><span>إضافة / خصم يدوي</span><span class="num">{{ s.adjustments > 0 ? '+' : '−' }} {{ fmt(Math.abs(s.adjustments)) }}</span></div>
@@ -78,7 +79,8 @@ const was = key => {
     <!-- this day: the whole row is coloured -->
     <div class="line result" :class="waiting ? 'wait' : tone(s.diff)" data-test="day-diff">
       <span>{{ dayLabel }}</span>
-      <b v-if="waiting" class="num">بانتظار عدّ النقدية</b>
+      <button v-if="waiting && editableCash" class="cell-btn editable num" data-test="count-cash" @click="emit('edit-cash', 'cash')"><b>بانتظار عدّ النقدية</b></button>
+      <b v-else-if="waiting" class="num">بانتظار عدّ النقدية</b>
       <span v-else class="row"><s v-if="was('diff') != null" class="old num">{{ dayWord(was('diff')) }} {{ fmt(Math.abs(was('diff'))) }}</s><b class="num">{{ s.diff == null ? '—' : fmt(Math.abs(s.diff)) }}</b></span>
     </div>
 
@@ -121,4 +123,5 @@ const was = key => {
 @media (prefers-reduced-motion: reduce) { .more { transition: none; } }
 /* phones: the same small arrow, a finger-sized touch area around it */
 @media (pointer: coarse) { .more { border: 7px solid transparent; background-clip: padding-box; margin: -7px; box-sizing: content-box; } }
+.editable { text-decoration: underline dotted; text-underline-offset: 4px; }   /* tap to change */
 </style>

@@ -5,7 +5,7 @@
 -->
 <script setup>
 import { unchecked } from '@shared/engine.js';
-import { ref, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import { useShop } from '@/stores/shop.js';
 import { useToasts } from '@/stores/toasts.js';
 import { fmt, fmtDate, toArabicDigits } from '@shared/money.js';
@@ -47,11 +47,26 @@ async function close(pw) {
   catch (e) { throw new Error(e.message); }
   chosen.value = null; toasts.show('تم حفظ التصفية');
 }
+/* النقدية / المكن from here too: both fields together, Enter goes on, the last Enter saves (an empty field = unchanged) */
+const cashEdit = ref(null);
+function openCash(field) {
+  if (!shop.canEdit) return;
+  const d = shop.book.day;
+  cashEdit.value = { cash: d.cashChanged ? d.cash : '', net: d.networkChanged ? d.network : '' };
+  nextTick(() => document.getElementById(field === 'network' ? 'ce-net' : 'ce-cash')?.focus());
+}
+const toCeNet = () => document.getElementById('ce-net')?.focus();
+function saveCash() {
+  const { cash, net } = cashEdit.value, d = shop.book.day;
+  if (cash !== '' && (cash !== d.cash || !d.cashChanged)) shop.dispatch({ t: 'setCash', value: cash }, { quiet: true });
+  if (net !== '' && (net !== d.network || !d.networkChanged)) shop.dispatch({ t: 'setNetwork', value: net }, { quiet: true });
+  cashEdit.value = null;
+}
 function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'setOpening', value: openingEdit.value, ...(gap.value ? { gap: true } : {}) })) openingEdit.value = null; }
 </script>
 <template>
   <div class="page narrow stack" v-if="s">
-    <SummaryPanel :s="s" :editable-opening="canEditOpening" :uncounted="uncounted" :cumulative="cum" :orig="shop.view?.editing ? null : shop.book?.day.orig" @edit-opening="openingEdit = s.opening ?? ''">
+    <SummaryPanel :s="s" :editable-opening="canEditOpening" :editable-cash="shop.canEdit" @edit-cash="openCash" :uncounted="uncounted" :cumulative="cum" :orig="shop.view?.editing ? null : shop.book?.day.orig" @edit-opening="openingEdit = s.opening ?? ''">
       <template #top>
         <div class="top-btn">
           <RouterLink to="/settle/deficits" class="btn wide deficits-btn" data-test="deficits-btn"><Icon name="list" /> العجوزات</RouterLink>
@@ -89,6 +104,13 @@ function saveOpening() { if (openingEdit.value !== '' && shop.dispatch({ t: 'set
     </PasswordDialog>
     <DayDialog v-if="dayOpen" :day="dayOpen" @close="dayOpen = null" />
     <LateDialog v-if="lateOpen" @close="lateOpen = false" />
+    <Modal v-if="cashEdit" title="النقدية والمكن" @close="cashEdit = null">
+      <div class="grid2">
+        <div><label class="label" for="ce-cash">النقدية الموجودة في المحل</label><MoneyInput id="ce-cash" v-model="cashEdit.cash" enterkeyhint="next" @enter="toCeNet" /></div>
+        <div><label class="label" for="ce-net">المكن</label><MoneyInput id="ce-net" v-model="cashEdit.net" enterkeyhint="done" @enter="saveCash" /></div>
+      </div>
+      <template #footer><button class="btn" @click="cashEdit = null">إلغاء</button><button class="btn primary" data-test="save-cash" @click="saveCash">حفظ</button></template>
+    </Modal>
     <Modal v-if="openingEdit !== null" title="تصفية البارحة" @close="openingEdit = null">
       <MoneyInput v-model="openingEdit" @enter="saveOpening" />
       <template #footer><button class="btn" @click="openingEdit = null">إلغاء</button><button class="btn primary" @click="saveOpening">حفظ</button></template>

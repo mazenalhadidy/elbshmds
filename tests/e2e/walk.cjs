@@ -176,6 +176,23 @@ const ok = (c, msg) => { console.log((c ? '✓ ' : '✗ ') + msg); if (!c) fails
   ok(s7.book.day.opening === 123456 && s7.book.day.openingManual === true, 'تصفية البارحة typed: 123,456 (kept when earlier days change)');
   ok((await p.locator('.summary').first().textContent()).includes('١٢٣٬٤٥٦'), '… and the summary shows it');
 
+  /* ---------- النقدية / المكن: changed from التصفية; a counted 0 shows ٠ ---------- */
+  await go('/settle');
+  for (const b of await p.locator('.summary .more').all()) { if (!(await p.isVisible('[data-test=edit-cash]'))) { await b.click(); await p.waitForTimeout(250); } }
+  await p.locator('[data-test=edit-cash]').click(); await p.waitForTimeout(300);
+  ok(await p.evaluate(() => document.activeElement?.id) === 'ce-cash', 'tapping النقدية on التصفية opens it, cursor ready');
+  await p.keyboard.press('Control+A'); await p.keyboard.type('4200'); await p.keyboard.press('Enter'); await p.waitForTimeout(150);
+  ok(await p.evaluate(() => document.activeElement?.id) === 'ce-net', '… Enter → المكن');
+  await p.keyboard.press('Control+A'); await p.keyboard.type('0'); await p.keyboard.press('Enter'); await p.waitForTimeout(600);
+  const until = async f => { let v; for (let i = 0; i < 40; i++) { v = await st(); if (f(v)) return v; await p.waitForTimeout(250); } return v; };   // the change is sent in the background
+  const s8 = await until(x => x.book.day.cash === 4200 && x.book.day.networkChanged);
+  ok(s8.book.day.cash === 4200 && s8.book.day.network === 0 && s8.book.day.networkChanged, `saved: النقدية 4,200 · المكن 0 (counted) — server: ${s8.book.day.cash} / ${s8.book.day.network} ${s8.book.day.networkChanged}`);
+  await go('/manage');
+  ok(await p.locator('#cash').inputValue() === '٤٬٢٠٠' && await p.locator('#net').inputValue() === '٠', 'الإدارة shows them (the 0 as ٠, not empty)');
+  await p.locator('#cash').click(); await p.keyboard.press('Control+A'); await p.keyboard.type('4300'); await p.locator('#net').click(); await p.waitForTimeout(500);
+  const s9 = await until(x => x.book.day.cash === 4300);
+  ok(s9.book.day.cash === 4300, `and changed again from الإدارة — server: ${s9.book.day.cash}`);
+
   /* ---------- every page, three widths ---------- */
   for (const [w, h] of [[390, 844], [768, 1024], [1280, 900]]) {
     const q = await br.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: w === 390 ? 2 : 1 }); q.on('pageerror', x => errs.push(w + ' ' + x.message));
